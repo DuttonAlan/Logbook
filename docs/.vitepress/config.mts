@@ -69,12 +69,16 @@ export default defineConfig({
       },
       {
         text: 'How-to guides',
-        items: [{ text: 'Run Logbook from source', link: '/how-to/run-from-source' }],
+        items: [
+          { text: 'Run Logbook from source', link: '/how-to/run-from-source' },
+          { text: 'Manage Applications and API Keys', link: '/how-to/manage-applications' },
+        ],
       },
       {
         text: 'Reference',
         items: [
           { text: 'Configuration', link: '/reference/configuration' },
+          { text: 'Admin API', link: '/reference/admin-api' },
           { text: 'Health checks', link: '/reference/health-checks' },
         ],
       },

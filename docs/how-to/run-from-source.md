@@ -39,6 +39,8 @@ dotnet run --project src/Logbook.Api
 
 The `https` launch profile also listens on <https://localhost:7080>. Trust the .NET development certificate once with `dotnet dev-certs https --trust`.
 
+The [admin API](../reference/admin-api.md) needs the admin key. In `Development` it is `development-only-admin-key-do-not-deploy`, from `appsettings.Development.json`. In Swagger UI, enter it under *Authorize*.
+
 ## 4. Run the web interface
 
 In a second terminal:

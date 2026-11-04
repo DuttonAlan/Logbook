@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 // See the LICENSE file in the project root for license information.
 
+using System.Net.Http.Headers;
+
 using Logbook.Infrastructure.Persistence;
 
 using Microsoft.AspNetCore.Hosting;
@@ -17,7 +19,24 @@ namespace Logbook.Api.IntegrationTests;
 /// </summary>
 public sealed class LogbookApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
+    /// <summary>
+    ///     The admin key the Api is configured with.
+    /// </summary>
+    public const string AdminKey = "integration-tests-admin-key-0123456789";
+
     private readonly PostgreSqlContainer _database = new PostgreSqlBuilder("postgres:17-alpine").Build();
+
+    /// <summary>
+    ///     Creates a client that sends the admin key with every request.
+    /// </summary>
+    /// <returns>The client.</returns>
+    public HttpClient CreateAdminClient()
+    {
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", AdminKey);
+
+        return client;
+    }
 
     /// <inheritdoc/>
     public async ValueTask InitializeAsync()
@@ -46,5 +65,6 @@ public sealed class LogbookApiFactory : WebApplicationFactory<Program>, IAsyncLi
         // Not Development, so the settings of appsettings.Development.json are not used.
         builder.UseEnvironment("Testing");
         builder.UseSetting("ConnectionStrings:Database", _database.GetConnectionString());
+        builder.UseSetting("AdminApi:Key", AdminKey);
     }
 }

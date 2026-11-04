@@ -30,7 +30,7 @@ You need Docker.
 ```sh
 git clone https://github.com/DuttonAlan/Logbook.git && cd Logbook
 
-cp .env.example .env    # then set POSTGRES_PASSWORD
+cp .env.example .env    # then set POSTGRES_PASSWORD and LOGBOOK_ADMIN_KEY
 docker compose up --build
 ```
 
@@ -52,7 +52,7 @@ The [documentation](docs/README.md) has four parts:
 
 - **Tutorials**: [Getting started](docs/tutorials/getting-started.md)
 - **How-to guides**: [run Logbook from source](docs/how-to/run-from-source.md)
-- **Reference**: [configuration](docs/reference/configuration.md), [health checks](docs/reference/health-checks.md)
+- **Reference**: [configuration](docs/reference/configuration.md), [admin API](docs/reference/admin-api.md), [health checks](docs/reference/health-checks.md)
 - **Explanation**: [architecture](docs/explanation/architecture.md)
 
 ## Roadmap

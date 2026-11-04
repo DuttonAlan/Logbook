@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 // See the LICENSE file in the project root for license information.
 
+using Logbook.Core.Domain.Entities;
+
 using Microsoft.EntityFrameworkCore;
 
 namespace Logbook.Infrastructure.Persistence;
@@ -15,6 +17,11 @@ namespace Logbook.Infrastructure.Persistence;
 /// </remarks>
 public sealed class LogbookContext(DbContextOptions<LogbookContext> options) : DbContext(options)
 {
+    /// <summary>
+    ///     The Applications Table. API Keys are loaded and saved together with their Application.
+    /// </summary>
+    public DbSet<Application> Applications => Set<Application>();
+
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

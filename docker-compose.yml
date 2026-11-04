@@ -2,7 +2,7 @@
 # Step by step: docs/tutorials/getting-started.md.
 #
 # Before the first start:
-#   cp .env.example .env              # then set the password in .env
+#   cp .env.example .env              # then set the password and the admin key in .env
 #   docker compose up --build
 
 name: logbook
@@ -47,6 +47,7 @@ services:
     environment:
       AllowedHosts: localhost
       ConnectionStrings__Database: Host=db;Database=logbook;Username=logbook;Password=${POSTGRES_PASSWORD}
+      AdminApi__Key: ${LOGBOOK_ADMIN_KEY:?Set LOGBOOK_ADMIN_KEY in .env}
 
 volumes:
   db-data:

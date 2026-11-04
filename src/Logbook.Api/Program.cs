@@ -4,13 +4,20 @@
 
 using System.Text.Json.Serialization;
 
+using Logbook.Api.Authentication;
+using Logbook.Api.Authorization;
 using Logbook.Api.ExceptionHandling;
 using Logbook.Api.HealthChecks;
+using Logbook.Api.OpenApi;
 using Logbook.Core;
 using Logbook.Infrastructure;
 using Logbook.Infrastructure.HealthChecks;
 
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
+using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,11 +32,29 @@ builder.Services.AddSwaggerGen(options =>
 
     options.SupportNonNullableReferenceTypes();
     options.NonNullableReferenceTypesAsRequired();
+
+    options.AddSecurityDefinition(AuthorizeOperationFilter.SecuritySchemeName, new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        Description = "The admin key from the setting `AdminApi:Key`."
+    });
+    options.OperationFilter<AuthorizeOperationFilter>();
 });
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ProblemDetailsExceptionHandler>();
 builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
+builder.Services.AddOptions<AdminApiOptions>()
+    .Bind(builder.Configuration.GetSection(AdminApiOptions.SectionName))
+    .ValidateOnStart();
+builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<AdminApiOptions>, AdminApiOptionsValidator>());
+
+// The admin API is protected by a single configured key until sign-in exists (milestone M4).
+builder.Services.AddAuthentication(AdminKeyAuthenticationHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, AdminKeyAuthenticationHandler>(AdminKeyAuthenticationHandler.SchemeName, configureOptions: null);
+builder.Services.AddAuthorization(options => options.AddLogbookPolicies());
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -49,6 +74,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 
