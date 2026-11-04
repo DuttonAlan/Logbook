@@ -1,0 +1,25 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="global.json" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Logbook.Api/Logbook.Api.csproj" />
+    <Project Path="src/Logbook.Core/Logbook.Core.csproj" />
+    <Project Path="src/Logbook.Infrastructure/Logbook.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/sdk/">
+    <File Path="sdk/Directory.Build.props" />
+    <Project Path="sdk/Logbook.Sdk/Logbook.Sdk.csproj" />
+    <Project Path="sdk/Logbook.Extensions.Logging/Logbook.Extensions.Logging.csproj" />
+    <Project Path="sdk/Logbook.AspNetCore/Logbook.AspNetCore.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/SampleWebApp/SampleWebApp.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <File Path="tests/Directory.Build.props" />
+    <Project Path="tests/Logbook.Api.IntegrationTests/Logbook.Api.IntegrationTests.csproj" />
+    <Project Path="tests/Logbook.Sdk.Tests/Logbook.Sdk.Tests.csproj" />
+  </Folder>
+</Solution>
