@@ -1,0 +1,9 @@
+:root {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: light dark;
+}
+body { margin: 0; }
+.shell { max-width: 720px; margin: 4rem auto; padding: 0 1rem; }
+.ok { color: #2e7d32; }
+.err { color: #c62828; }
+.muted { opacity: 0.6; }
