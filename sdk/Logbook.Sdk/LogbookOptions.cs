@@ -32,6 +32,12 @@ public sealed class LogbookOptions
     public string? ApiKey { get; set; }
 
     /// <summary>
+    ///     The Environment of the events the <c>ILogger</c> provider creates, e.g. <c>Production</c>. Overrides the name
+    ///     from <c>IHostEnvironment</c>.
+    /// </summary>
+    public string? Environment { get; set; }
+
+    /// <summary>
     ///     Maximum number of events sent in one request.
     /// </summary>
     public int BatchSize { get; set; } = 100;

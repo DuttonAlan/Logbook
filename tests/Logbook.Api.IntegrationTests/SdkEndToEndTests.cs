@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 // See the LICENSE file in the project root for license information.
 
+using System.Diagnostics;
 using System.Diagnostics.Tracing;
 using System.Net;
 using System.Net.Http.Json;
@@ -9,6 +10,9 @@ using System.Text.Json;
 
 using Logbook.Core.Application.Applications.Create;
 using Logbook.Sdk;
+
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Logbook.Api.IntegrationTests;
 
@@ -261,6 +265,77 @@ public sealed class SdkEndToEndTests(LogbookApiFactory factory) : IClassFixture<
 
         Assert.Equal(25, (await WaitForLogEventsAsync(application.Id, 25)).Length);
         Assert.Equal(0, client.Buffer!.DroppedCount);
+    }
+
+    [Fact]
+    public async Task ACallToILogger_ArrivesWithEverythingItCarries()
+    {
+        var application = await CreateApplicationAsync();
+
+        var services = new ServiceCollection();
+        services.AddSingleton(_ => new LogbookClient(
+            new LogbookOptions { Endpoint = factory.Server.BaseAddress, ApiKey = application.ApiKey.Key, ShutdownTimeout = WaitLimit },
+            factory.Server.CreateHandler(),
+            TimeProvider.System));
+        services.AddLogging(logging => logging.AddLogbook(options => options.Environment = "Staging"));
+
+        using var activity = new Activity("request");
+        activity.SetIdFormat(ActivityIdFormat.W3C).Start();
+        Exception failure;
+
+        try
+        {
+            try
+            {
+                throw new InvalidOperationException("Inner failure");
+            }
+            catch (InvalidOperationException first)
+            {
+                throw new AggregateException("Outer failure", first, new ArgumentException("Second failure"));
+            }
+        }
+        catch (AggregateException aggregate)
+        {
+            failure = aggregate;
+        }
+
+        using (var provider = services.BuildServiceProvider())
+        {
+            var logger = provider.GetRequiredService<ILoggerFactory>().CreateLogger("Shop.Orders");
+
+            using (logger.BeginScope(new Dictionary<string, object?> { ["TenantId"] = 7 }))
+            using (logger.BeginScope("Order {ScopeOrderId}", 42))
+            {
+                logger.LogError(new EventId(4001, "OrderFailed"), failure, "Order {OrderId} failed at {Price}", 42, 9.5m);
+            }
+        }
+
+        var stored = (await WaitForLogEventsAsync(application.Id, 1))[0];
+
+        Assert.Equal("Error", stored.GetProperty("level").GetString());
+        Assert.Equal("Order 42 failed at 9.5", stored.GetProperty("message").GetString());
+        Assert.Equal("Order {OrderId} failed at {Price}", stored.GetProperty("messageTemplate").GetString());
+        Assert.Equal("Shop.Orders", stored.GetProperty("category").GetString());
+        Assert.Equal("Staging", stored.GetProperty("environment").GetString());
+        Assert.Equal(4001, stored.GetProperty("eventId").GetInt32());
+        Assert.Equal(activity.TraceId.ToHexString(), stored.GetProperty("traceId").GetString());
+        Assert.Equal(activity.SpanId.ToHexString(), stored.GetProperty("spanId").GetString());
+
+        var properties = stored.GetProperty("properties");
+        Assert.Equal(42, properties.GetProperty("OrderId").GetInt32());
+        Assert.Equal(9.5m, properties.GetProperty("Price").GetDecimal());
+        Assert.Equal(7, properties.GetProperty("TenantId").GetInt32());
+        Assert.Equal(42, properties.GetProperty("ScopeOrderId").GetInt32());
+        Assert.Equal("Order 42", properties.GetProperty("Scopes")[0].GetString());
+        Assert.Equal("OrderFailed", properties.GetProperty("EventName").GetString());
+
+        var exception = stored.GetProperty("exception");
+        Assert.Equal("System.AggregateException", exception.GetProperty("type").GetString());
+        Assert.NotNull(exception.GetProperty("stackTrace").GetString());
+        var inner = exception.GetProperty("innerExceptions");
+        Assert.Equal("System.InvalidOperationException", inner[0].GetProperty("type").GetString());
+        Assert.Equal("Inner failure", inner[0].GetProperty("message").GetString());
+        Assert.Equal("System.ArgumentException", inner[1].GetProperty("type").GetString());
     }
 
     [Fact]

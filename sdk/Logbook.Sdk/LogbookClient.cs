@@ -74,9 +74,9 @@ public sealed class LogbookClient : IDisposable
     }
 
     /// <summary>
-    ///     Whether the client has usable options and sends events.
+    ///     Whether the client has usable options and sends events. If not, the <c>EventSource</c> has reported why.
     /// </summary>
-    internal bool IsEnabled => _buffer is not null;
+    public bool IsEnabled => _buffer is not null;
 
     /// <summary>
     ///     The buffer of the client, or null if it is disabled.

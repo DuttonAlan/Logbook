@@ -1,6 +1,6 @@
 # Log API
 
-The log API is what applications send their Log Events to and what you search them with. The [SDK](../explanation/architecture.md#the-sdk) will send for you (milestone M2), and the web interface will search for you (milestone M3); until then, you can call it directly.
+The log API is what applications send their Log Events to and what you search them with. The [SDK](../explanation/architecture.md#the-sdk) sends for you, and the web interface will search for you (milestone M3); until then, you can call it directly.
 
 - **Authentication to send:** the API Key of an Application in the header `X-Logbook-Key`. Without an active API Key the endpoint returns `401`, whatever the body contains. The admin key is not accepted. To get an API Key, see [Manage Applications and API Keys](../how-to/manage-applications.md).
 - **Authentication to search:** the admin key from the setting [`AdminApi:Key`](configuration.md#server), as `Authorization: Bearer …`. An API Key can only send, so one that leaks from an application cannot read any logs.

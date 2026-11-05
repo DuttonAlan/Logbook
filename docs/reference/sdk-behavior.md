@@ -1,8 +1,53 @@
 # SDK behavior
 
-What `Logbook.Sdk` does with each response of the server, with events that break a limit, and when the application shuts down, and how to follow all of this through its diagnostics. The settings are listed in [Configuration](configuration.md#sdk).
+What the `ILogger` provider turns a call into, what `Logbook.Sdk` does with each response of the server, with events that break a limit, and when the application shuts down, and how to follow all of this through its diagnostics. The settings are listed in [Configuration](configuration.md#sdk).
 
 The client never throws into the application. It only makes the application wait while it is disposed, for at most `ShutdownTimeout`.
+
+## From `ILogger` to an event
+
+| Field | Comes from |
+|---|---|
+| `timestamp` | The time of the call. |
+| `level` | The `LogLevel`. |
+| `message` | The rendered message. |
+| `messageTemplate` | The template of the call, e.g. `Order {OrderId} failed`. Also for source-generated `[LoggerMessage]` methods. |
+| `category` | The category of the logger. |
+| `environment` | The option `Environment`, otherwise the name from `IHostEnvironment`. |
+| `eventId` | The Id of the `EventId`. An Id of 0 is left out. |
+| `traceId`, `spanId` | `Activity.Current`, if it has W3C identifiers. |
+| `exception` | The exception, see [below](#exceptions). |
+| `properties` | The values of the call and of its scopes, see [below](#properties). |
+
+Logs of the categories `Logbook.Sdk`, `Logbook.Extensions.Logging`, `Logbook.AspNetCore` and `System.Net.Http.HttpClient`, each including what is below them, are never sent, so that sending cannot create more to send. This also excludes the logs of the other `HttpClient`s of the application.
+
+### Properties
+
+| Source | Property |
+|---|---|
+| The named values of the call | One property for each. |
+| A scope with named values, e.g. a dictionary or `BeginScope("Order {OrderId}", 42)` | One property for each. |
+| A scope with text, e.g. `BeginScope("Import")` or the text of a scope with a template | Listed in the array `Scopes`, outermost first. |
+| The name of the `EventId` | `EventName`. |
+
+For values of the same name, the call wins over the innermost scope, and that one over the outer scopes. `Scopes` and `EventName` never replace a value of the application.
+
+Values are captured during the call, so later changes to an object are not sent. Text, numbers, booleans, `null`, `DateTime`, `DateTimeOffset` and `Guid` keep their JSON type. Dictionaries become objects and other collections become arrays, up to 100 items and 5 levels deep. Everything else, including enums, is sent as text using `ToString`, formatted with the invariant culture. Objects are never read through reflection, because that would run their getters and could send secrets nobody meant to log.
+
+### Exceptions
+
+```json
+{
+  "type": "System.InvalidOperationException",
+  "message": "…",
+  "stackTrace": "…",
+  "inner": { "type": "System.ArgumentException", "message": "…", "stackTrace": "…", "inner": null }
+}
+```
+
+An `AggregateException` has the array `innerExceptions` instead of `inner`. At most 32 exceptions and 8 levels are sent. If a member of an exception or a value throws, the rest of the event is still sent.
+
+If any of these limits is reached, or text in a value or an exception is over `MaxMessageLength`, the event is marked as [truncated](#events-over-a-limit).
 
 ## Responses
 

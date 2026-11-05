@@ -5,6 +5,8 @@
 using System.Reflection;
 using System.Runtime.Versioning;
 
+using Logbook.Extensions.Logging;
+
 namespace Logbook.Sdk.Tests;
 
 /// <summary>
@@ -21,8 +23,7 @@ public sealed class SdkBuildTests
         const string Expected = ".NETCoreApp,Version=v10.0";
 #endif
 
-        var attribute = typeof(LogbookClient).Assembly.GetCustomAttribute<TargetFrameworkAttribute>();
-
-        Assert.Equal(Expected, attribute?.FrameworkName);
+        Assert.Equal(Expected, typeof(LogbookClient).Assembly.GetCustomAttribute<TargetFrameworkAttribute>()?.FrameworkName);
+        Assert.Equal(Expected, typeof(LogbookLoggerProvider).Assembly.GetCustomAttribute<TargetFrameworkAttribute>()?.FrameworkName);
     }
 }

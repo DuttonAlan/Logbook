@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\sdk\Logbook.Sdk\Logbook.Sdk.csproj" />
+    <ProjectReference Include="..\..\sdk\Logbook.Extensions.Logging\Logbook.Extensions.Logging.csproj" />
   </ItemGroup>
 
 </Project>

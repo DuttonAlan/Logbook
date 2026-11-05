@@ -5,13 +5,18 @@
 // A small web application to try the Logbook SDK against a local Logbook server.
 var builder = WebApplication.CreateBuilder(args);
 
-// Milestone M2: builder.Logging.AddLogbook(options => { options.Endpoint = new Uri("http://localhost:5080"); options.ApiKey = "…"; });
+// Reads the section "Logbook". Without an API Key, the sample runs but sends nothing. Set one for this run with the
+// environment variable Logbook__ApiKey, so that it does not end up in a file.
+builder.Logging.AddLogbook();
 
 var app = builder.Build();
 
 app.MapGet("/", (ILogger<Program> logger) =>
 {
-    logger.LogInformation("Hello from {Application} at {Time}", "SampleWebApp", DateTimeOffset.UtcNow);
+    using (logger.BeginScope(new Dictionary<string, object?> { ["Visitor"] = Guid.NewGuid() }))
+    {
+        logger.LogInformation("Hello from {Application} at {Time}", "SampleWebApp", DateTimeOffset.UtcNow);
+    }
 
     return "SampleWebApp is running. Open /error to log an exception.";
 });

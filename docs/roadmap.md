@@ -78,10 +78,10 @@ Every Log Event belongs to an **Application**, which the server takes from the A
 
 - [x] `Logbook.Sdk`: bounded buffer limited by events and by memory, background sender, batching by size and time, gzip, drop-oldest when full
 - [x] Retries with exponential backoff and `Retry-After`, size guards with truncation
-- [ ] `Logbook.Extensions.Logging`: `builder.Logging.AddLogbook(…)`, configuration from the section `Logbook`, Environment from `IHostEnvironment` with an override in the options
-- [ ] Message templates, scopes and `EventId` as structured properties
-- [ ] Exceptions with inner and aggregate exceptions
-- [ ] `traceId` and `spanId` from `Activity.Current`
+- [x] `Logbook.Extensions.Logging`: `builder.Logging.AddLogbook(…)`, configuration from the section `Logbook`, Environment from `IHostEnvironment` with an override in the options
+- [x] Message templates, scopes and `EventId` as structured properties
+- [x] Exceptions with inner and aggregate exceptions
+- [x] `traceId` and `spanId` from `Activity.Current`
 - [x] Flush on shutdown; self-diagnostics through `EventSource`, so the SDK never logs into itself
 - [x] Tests for every failure path: server down, slow, returning errors, buffer full
 - [ ] Publish the packages to NuGet from the release workflow

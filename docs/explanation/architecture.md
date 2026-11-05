@@ -90,6 +90,8 @@ A batch stays in the buffer until the server has accepted it, so it counts towar
 
 The server rejects a whole batch for a single event it does not accept, so the client enforces the same limits before sending. Dropping a large event would lose exactly the logs that tend to matter, such as a huge stack trace, so its long text is cut first and it is marked as truncated. Since a wrong API Key is usually fixed by someone within a while, it is treated like an outage with a long backoff rather than a reason to throw events away. The details are in [SDK behavior](../reference/sdk-behavior.md).
 
+The `ILogger` provider writes the structured values of a call to JSON right away, on the thread of the application, because they could change while the event waits in the buffer. Objects other than plain values and collections are sent as text instead of being serialized: reflection would run their getters, could follow cycles and could send secrets nobody meant to log.
+
 The SDK reports what it does through an `EventSource`. Logging through `ILogger` would send its own logs to itself, and every attempt to send would create more to send.
 
 The SDK does not reference the server projects. The two only share the format of the requests, which is versioned so that older SDKs keep working with newer servers.
