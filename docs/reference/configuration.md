@@ -12,6 +12,9 @@ Logbook is configured like any ASP.NET Core application: through `appsettings.js
 | `LogIngestion:MaxEventBytes` | `262144` (256 KiB) | Maximum size of the message, message template, exception and properties of one Log Event together. Must be greater than 0 and at most `MaxRequestBytes`. |
 | `LogIngestion:MaxEventAge` | `7.00:00:00` | How far in the past the timestamp of a Log Event may be. Greater than 0 and at most 3650 days. Each day in the accepted window can become a table in the database. |
 | `LogIngestion:MaxFutureOffset` | `1.00:00:00` | How far in the future the timestamp of a Log Event may be, to tolerate wrong clocks. From 0 to 3650 days. |
+| `LogIngestion:MaxQueuedBytes` | `268435456` (256 MiB) | Maximum memory for Log Events that are accepted but not written yet. Above it, the log API returns `503`. An empty queue takes any batch, so usage can exceed this by one batch. Must be greater than 0. |
+| `LogIngestion:WriteBatchSize` | `1000` | Maximum number of Log Events written to the database at once. Must be greater than 0. |
+| `LogIngestion:WriteInterval` | `00:00:01` | How long a Log Event waits for others to be written with it, if there are fewer than `WriteBatchSize`. Must be greater than 0. |
 | `AllowedHosts` | `*` | Host names the server answers to, separated by `;`. Set it to your domain in production. |
 | `ASPNETCORE_HTTP_PORTS` | `8080` in the container image | Port for plain HTTP, for a TLS-terminating reverse proxy. |
 | `ASPNETCORE_ENVIRONMENT` | `Production` | `Development` enables Swagger UI at `/swagger` and the settings of `appsettings.Development.json`. Never use it outside your computer. |

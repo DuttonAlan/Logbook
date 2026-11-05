@@ -4,6 +4,7 @@
 
 using Logbook.Core.Abstractions;
 using Logbook.Infrastructure.HealthChecks;
+using Logbook.Infrastructure.Ingestion;
 using Logbook.Infrastructure.Persistence;
 using Logbook.Infrastructure.Persistence.Repositories;
 using Logbook.Infrastructure.Security;
@@ -44,6 +45,11 @@ public static class ServiceCollectionExtensions
 
         serviceCollection.AddTransient<IApplicationRepository, ApplicationRepository>();
         serviceCollection.AddTransient<ILogEventRepository, LogEventRepository>();
+
+        serviceCollection.AddSingleton<LogEventQueue>();
+        serviceCollection.AddSingleton<ILogEventQueue>(services => services.GetRequiredService<LogEventQueue>());
+        serviceCollection.AddSingleton<LogEventBatchWriter>();
+        serviceCollection.AddHostedService<LogEventWriterService>();
 
         serviceCollection.AddSingleton<IApiKeyGenerator, ApiKeyGenerator>();
         serviceCollection.AddSingleton<IApiKeyHasher, Sha256ApiKeyHasher>();

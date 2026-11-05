@@ -57,7 +57,7 @@ SDK: `sdk/` holds the NuGet packages; shared package settings are in `sdk/Direct
 
 ### Errors
 
-Services throw `NotFoundException` (404), `ConflictException` (409) or `DomainValidationException` (400); `ProblemDetailsExceptionHandler` maps them, plus unique-violation and concurrency `DbUpdateException`s, to 409. `InvalidOperationException`/`ArgumentException` are intentionally **not** mapped and stay 500 — don't throw them for business-rule violations.
+Services throw `NotFoundException` (404), `ConflictException` (409), `DomainValidationException` (400) or `ServiceBusyException` (503 with `Retry-After`); `ProblemDetailsExceptionHandler` maps them, plus unique-violation and concurrency `DbUpdateException`s, to 409. `InvalidOperationException`/`ArgumentException` are intentionally **not** mapped and stay 500 — don't throw them for business-rule violations.
 
 ### Conventions
 

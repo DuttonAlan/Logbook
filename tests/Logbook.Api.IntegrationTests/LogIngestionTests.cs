@@ -7,11 +7,14 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 
+using Logbook.Core.Abstractions;
 using Logbook.Core.Application.Applications.Create;
 using Logbook.Core.Application.LogEvents.Ingest;
 using Logbook.Core.Domain.Entities;
 using Logbook.Infrastructure.Persistence;
 
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -77,7 +80,7 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
         var accepted = await response.Content.ReadFromJsonAsync<IngestLogEventsResponse>(TestContext.Current.CancellationToken);
         Assert.Equal(1, accepted!.Accepted);
 
-        var stored = Assert.Single(await GetStoredAsync());
+        var stored = Assert.Single(await WaitForStoredAsync(1));
 
         Assert.Equal(_applicationId, stored.ApplicationId);
         Assert.Equal(timestamp.UtcDateTime, stored.Timestamp, TimeSpan.FromMilliseconds(1));
@@ -106,7 +109,7 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
         using var response = await PostAsync(LogEventBodies.Valid(member));
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        Assert.Equal(LogEvent.DefaultEnvironment, Assert.Single(await GetStoredAsync()).Environment);
+        Assert.Equal(LogEvent.DefaultEnvironment, Assert.Single(await WaitForStoredAsync(1)).Environment);
     }
 
     [Fact]
@@ -118,6 +121,24 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
         using var response = await PostAsync(body);
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Equal(string.Empty, Assert.Single(await WaitForStoredAsync(1)).Message);
+    }
+
+    [Fact]
+    public async Task Post_WithOnlyRequiredFields_StoresNullForTheOthers()
+    {
+        using var response = await PostAsync(LogEventBodies.Valid());
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+
+        var stored = Assert.Single(await WaitForStoredAsync(1));
+        Assert.Null(stored.MessageTemplate);
+        Assert.Null(stored.Category);
+        Assert.Null(stored.EventId);
+        Assert.Null(stored.Exception);
+        Assert.Null(stored.TraceId);
+        Assert.Null(stored.SpanId);
+        Assert.Null(stored.Properties);
     }
 
     [Fact]
@@ -129,7 +150,7 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
         using var response = await PostAsync(body);
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        Assert.Equal(utc.UtcDateTime, Assert.Single(await GetStoredAsync()).Timestamp, TimeSpan.FromMilliseconds(1));
+        Assert.Equal(utc.UtcDateTime, Assert.Single(await WaitForStoredAsync(1)).Timestamp, TimeSpan.FromMilliseconds(1));
     }
 
     [Theory]
@@ -188,7 +209,7 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("Log Event 1", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken), StringComparison.Ordinal);
-        Assert.Empty(await GetStoredAsync());
+        await AssertRejectedBatchWasNotStoredAsync();
     }
 
     [Theory]
@@ -221,7 +242,7 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
         using var response = await _client.PostAsync(Endpoint, content, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        Assert.Single(await GetStoredAsync());
+        Assert.Single(await WaitForStoredAsync(1));
     }
 
     [Fact]
@@ -292,7 +313,7 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
         using var response = await PostAsync(LogEventBodies.Valid(member));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Empty(await GetStoredAsync());
+        await AssertRejectedBatchWasNotStoredAsync();
     }
 
     [Fact]
@@ -321,6 +342,7 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
         using var response = await PostAsync(body);
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Single(await WaitForStoredAsync(1));
     }
 
     [Fact]
@@ -348,14 +370,14 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
 
-        var stored = Assert.Single(await GetStoredAsync());
-        Assert.Equal("null�character", stored.Message);
-        Assert.Equal("cat�egory", stored.Category);
+        var stored = Assert.Single(await WaitForStoredAsync(1));
+        Assert.Equal("null\uFFFDcharacter", stored.Message);
+        Assert.Equal("cat\uFFFDegory", stored.Category);
 
         using var properties = JsonDocument.Parse(stored.Properties!);
         var root = properties.RootElement;
-        Assert.Equal("a�b", root.GetProperty("text").GetString());
-        Assert.Equal(1, root.GetProperty("key�").GetInt32());
+        Assert.Equal("a\uFFFDb", root.GetProperty("text").GetString());
+        Assert.Equal(1, root.GetProperty("key\uFFFD").GetInt32());
         Assert.Equal("1e999999", root.GetProperty("huge").GetString());
         Assert.Equal("1e-20000", root.GetProperty("tiny").GetString());
         Assert.Equal(JsonValueKind.String, root.GetProperty("long").ValueKind);
@@ -378,6 +400,7 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
 
         using var response = await PostAsync(body);
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        await WaitForStoredAsync(3);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<LogbookContext>();
@@ -394,14 +417,28 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
     }
 
     [Fact]
-    public async Task Post_ConcurrentlyForADayWithoutPartition_AllSucceed()
+    public async Task EnsurePartitions_ConcurrentlyForTheSameDay_AllSucceed()
     {
-        var day = DateTimeOffset.UtcNow.AddDays(-6);
-
-        var requests = Enumerable.Range(0, 8).Select(async _ =>
+        // One writer per server, but several servers can share a database.
+        var calls = Enumerable.Range(0, 8).Select(async _ =>
         {
-            var body = $$"""[{ "timestamp": "{{day:O}}", "level": "Error", "message": "m" }]""";
-            using var response = await PostAsync(body);
+            await using var scope = factory.Services.CreateAsyncScope();
+            var context = scope.ServiceProvider.GetRequiredService<LogbookContext>();
+
+            await context.Database.ExecuteSqlRawAsync(
+                "SELECT telemetry.ensure_log_event_partitions(ARRAY[DATE '2021-03-01'])",
+                TestContext.Current.CancellationToken);
+        });
+
+        await Task.WhenAll(calls);
+    }
+
+    [Fact]
+    public async Task Post_ManyBatches_StoresEveryLogEventOnce()
+    {
+        var requests = Enumerable.Range(0, 20).Select(async _ =>
+        {
+            using var response = await PostAsync(LogEventBodies.Valid());
 
             return response.StatusCode;
         });
@@ -409,7 +446,63 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
         var results = await Task.WhenAll(requests);
 
         Assert.All(results, status => Assert.Equal(HttpStatusCode.Accepted, status));
-        Assert.Equal(8, (await GetStoredAsync()).Count);
+        Assert.Equal(20, (await WaitForStoredAsync(20)).Count);
+    }
+
+    [Fact]
+    public async Task Shutdown_WritesWhatIsLeftInTheQueue()
+    {
+        // The interval keeps the Log Event in the queue until the host stops.
+        var waiting = factory.WithWebHostBuilder(builder => builder.UseSetting("LogIngestion:WriteInterval", "01:00:00"));
+        using var client = CreateClientWithHeadersOf(waiting);
+        using var content = LogEventBodies.Json(LogEventBodies.Valid());
+
+        using var response = await client.PostAsync(Endpoint, content, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Empty(await GetStoredAsync());
+
+        await waiting.DisposeAsync();
+
+        Assert.Single(await GetStoredAsync());
+    }
+
+    [Fact]
+    public async Task Post_WhileTheQueueIsFull_IsServiceUnavailable_UntilLogEventsAreWritten()
+    {
+        var repository = new BlockedLogEventRepository();
+        await using var blocked = factory.WithWebHostBuilder(builder => builder
+            .UseSetting("LogIngestion:MaxQueuedBytes", "1")
+            .ConfigureTestServices(services => services.AddSingleton<ILogEventRepository>(repository)));
+        using var client = CreateClientWithHeadersOf(blocked);
+
+        // An empty queue takes any batch.
+        using (var content = LogEventBodies.Json(LogEventBodies.Valid()))
+        using (var first = await client.PostAsync(Endpoint, content, TestContext.Current.CancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.Accepted, first.StatusCode);
+        }
+
+        using (var content = LogEventBodies.Json(LogEventBodies.Valid()))
+        using (var second = await client.PostAsync(Endpoint, content, TestContext.Current.CancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, second.StatusCode);
+            Assert.Equal("application/problem+json", second.Content.Headers.ContentType?.MediaType);
+            Assert.Equal(TimeSpan.FromSeconds(5), second.Headers.RetryAfter?.Delta);
+        }
+
+        repository.Unblock();
+
+        HttpStatusCode status;
+
+        do
+        {
+            await Task.Delay(25, TestContext.Current.CancellationToken);
+
+            using var content = LogEventBodies.Json(LogEventBodies.Valid());
+            using var next = await client.PostAsync(Endpoint, content, TestContext.Current.CancellationToken);
+            status = next.StatusCode;
+        }
+        while (status != HttpStatusCode.Accepted);
     }
 
     [Fact]
@@ -418,6 +511,7 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
         var now = DateTimeOffset.UtcNow;
         using var response = await PostAsync(LogEventBodies.Valid());
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        await WaitForStoredAsync(1);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<LogbookContext>();
@@ -502,7 +596,13 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
             maxBytes.ToString(System.Globalization.CultureInfo.InvariantCulture)).UseSetting(
             "LogIngestion:MaxEventBytes",
             maxBytes.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-        var client = limited.CreateClient();
+
+        return CreateClientWithHeadersOf(limited);
+    }
+
+    private HttpClient CreateClientWithHeadersOf(WebApplicationFactory<Program> application)
+    {
+        var client = application.CreateClient();
 
         foreach (var header in _client.DefaultRequestHeaders)
         {
@@ -510,6 +610,32 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
         }
 
         return client;
+    }
+
+    /// <summary>
+    ///     Proves that a rejected batch is not on its way either: it was rejected before a Log Event sent afterwards, so
+    ///     it would be stored no later than that one.
+    /// </summary>
+    private async Task AssertRejectedBatchWasNotStoredAsync()
+    {
+        using var response = await PostAsync(LogEventBodies.Valid());
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+
+        Assert.Single(await WaitForStoredAsync(1));
+    }
+
+    private async Task<List<LogEvent>> WaitForStoredAsync(int count)
+    {
+        var stored = await GetStoredAsync();
+
+        while (stored.Count < count)
+        {
+            await Task.Delay(25, TestContext.Current.CancellationToken);
+
+            stored = await GetStoredAsync();
+        }
+
+        return stored;
     }
 
     private async Task<HttpResponseMessage> PostAsync(string body)
@@ -528,6 +654,21 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
             .AsNoTracking()
             .Where(logEvent => logEvent.ApplicationId == _applicationId)
             .ToListAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    ///     A repository whose writes wait until they are unblocked, so the queue stays full.
+    /// </summary>
+    private sealed class BlockedLogEventRepository : ILogEventRepository
+    {
+        private readonly TaskCompletionSource _unblocked = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void Unblock() => _unblocked.TrySetResult();
+
+        public Task AddRange(IReadOnlyCollection<LogEvent> logEvents, CancellationToken cancellationToken = default)
+        {
+            return _unblocked.Task.WaitAsync(cancellationToken);
+        }
     }
 
     /// <summary>

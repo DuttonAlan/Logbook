@@ -66,5 +66,8 @@ public sealed class LogbookApiFactory : WebApplicationFactory<Program>, IAsyncLi
         builder.UseEnvironment("Testing");
         builder.UseSetting("ConnectionStrings:Database", _database.GetConnectionString());
         builder.UseSetting("AdminApi:Key", AdminKey);
+
+        // Tests wait for Log Events to be written, so they should not wait for a batch to fill up.
+        builder.UseSetting("LogIngestion:WriteInterval", "00:00:00.020");
     }
 }

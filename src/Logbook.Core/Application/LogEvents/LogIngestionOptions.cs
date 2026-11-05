@@ -33,4 +33,20 @@ public sealed class LogIngestionOptions
     ///     How far in the future the timestamp of a Log Event may be, to tolerate wrong clocks.
     /// </summary>
     public TimeSpan MaxFutureOffset { get; set; } = TimeSpan.FromDays(1);
+
+    /// <summary>
+    ///     Maximum memory in bytes for Log Events that are accepted but not written yet. When it is reached, requests are
+    ///     rejected until Log Events are written. A batch is always accepted if the queue is empty.
+    /// </summary>
+    public long MaxQueuedBytes { get; set; } = 256 * 1024 * 1024;
+
+    /// <summary>
+    ///     Maximum number of Log Events written to the database at once.
+    /// </summary>
+    public int WriteBatchSize { get; set; } = 1000;
+
+    /// <summary>
+    ///     How long a Log Event waits for others to be written with it, if there are fewer than <see cref="WriteBatchSize"/>.
+    /// </summary>
+    public TimeSpan WriteInterval { get; set; } = TimeSpan.FromSeconds(1);
 }

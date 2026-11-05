@@ -58,13 +58,24 @@ Send `Content-Encoding: gzip` to compress the body. No other encoding is support
 
 | Status | Description |
 |---|---|
-| `202` | Accepted, with the number of Log Events: `{"accepted": 1}`. |
+| `202` | Accepted, with the number of Log Events: `{"accepted": 1}`. They are written to the database shortly afterwards, see [below](#when-log-events-are-stored). |
 | `400` | The body is not valid: malformed JSON or gzip, an empty array, or a Log Event that breaks a rule above. |
 | `401` | The API Key is missing, unknown, revoked or expired. |
 | `413` | The body is larger than `LogIngestion:MaxRequestBytes`, before or after decompression. |
 | `415` | The body is not JSON, or the content encoding is not gzip. |
+| `500` | An unexpected error. This includes the database being unavailable, because the API Key is checked there. |
+| `503` | The queue is full, with a `Retry-After` header. None of the Log Events were accepted. |
 
-A batch is accepted as a whole. **If one Log Event is not valid, none are stored**, and the `400` response names the position of the first invalid one, counted from 0. Retrying the same batch does not help, unlike after a `5xx` response.
+A batch is accepted as a whole. **If one Log Event is not valid, none are accepted**, and the `400` response names the position of the first invalid one, counted from 0. Sending the same batch again does not help. After a `5xx` response, send it again later: no Log Event of it was accepted, so this creates no duplicates.
+
+### When Log Events are stored
+
+`202` means Logbook has taken responsibility for the Log Events, not that they are in the database yet. They wait in memory and are written in batches, normally within about a second, so they can be searched shortly after that.
+
+- **The database is unavailable:** writing is retried until it works. Accepted Log Events are kept, and nothing is lost if Logbook keeps running.
+- **Logbook stops:** it writes what is left within the shutdown timeout of the host (30 seconds by default). Whatever could not be written is lost, and the number is logged as an error. Give the container at least that long to stop: Docker's default is only 10 seconds.
+- **Logbook crashes or is killed:** Log Events that were not written yet are lost.
+- **PostgreSQL refuses a single Log Event:** only that one is dropped, and its Id is logged as an error. This should not happen, because values that PostgreSQL cannot store are replaced when they arrive.
 
 ### Limits
 
@@ -75,6 +86,7 @@ Set with the [`LogIngestion` settings](configuration.md#server):
 | Size of the request body, before and after decompression | 5 MiB |
 | Size of one Log Event: `message`, `messageTemplate`, `exception` and `properties` together | 256 KiB (`400` if exceeded) |
 | Accepted time window of `timestamp` | from 7 days in the past to 1 day in the future |
+| Memory for Log Events that are not written yet | 256 MiB (`503` if exceeded) |
 
 The time window exists because Logbook stores each day in its own partition, so a wrong clock could otherwise create any number of tables.
 

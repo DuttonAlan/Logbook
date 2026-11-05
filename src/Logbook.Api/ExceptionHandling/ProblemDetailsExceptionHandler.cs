@@ -20,6 +20,8 @@ namespace Logbook.Api.ExceptionHandling;
 /// <param name="problemDetailsService">The Service to write the problem details response.</param>
 public sealed class ProblemDetailsExceptionHandler(IProblemDetailsService problemDetailsService) : IExceptionHandler
 {
+    private const string RetryAfterSeconds = "5";
+
     /// <inheritdoc/>
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
@@ -48,6 +50,8 @@ public sealed class ProblemDetailsExceptionHandler(IProblemDetailsService proble
 
             // The request itself was rejected while its body was read, e.g. because it is too large.
             BadHttpRequestException badRequest => (badRequest.StatusCode, exception.Message),
+
+            ServiceBusyException => (StatusCodes.Status503ServiceUnavailable, exception.Message),
             _ => (0, null)
         };
 
@@ -57,6 +61,11 @@ public sealed class ProblemDetailsExceptionHandler(IProblemDetailsService proble
         }
 
         httpContext.Response.StatusCode = statusCode;
+
+        if (exception is ServiceBusyException)
+        {
+            httpContext.Response.Headers.RetryAfter = RetryAfterSeconds;
+        }
 
         return await problemDetailsService.TryWriteAsync(new ProblemDetailsContext
         {

@@ -39,6 +39,8 @@ services:
       context: .
       target: runtime
     image: logbook:local
+    # Longer than the shutdown timeout of the host (30 s), so Log Events in the queue get written on "docker compose stop".
+    stop_grace_period: 35s
     depends_on:
       migrate:
         condition: service_completed_successfully

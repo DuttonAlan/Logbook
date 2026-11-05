@@ -149,9 +149,15 @@ public sealed class LogApiAccessTests(LogbookApiFactory factory) : IClassFixture
 
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<LogbookContext>();
-        var stored = await context.LogEvents.AsNoTracking().SingleAsync(
-            logEvent => logEvent.Category == category,
-            TestContext.Current.CancellationToken);
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        // Accepted Log Events are written in the background.
+        while (!await context.LogEvents.AnyAsync(logEvent => logEvent.Category == category, cancellationToken))
+        {
+            await Task.Delay(25, cancellationToken);
+        }
+
+        var stored = await context.LogEvents.AsNoTracking().SingleAsync(logEvent => logEvent.Category == category, cancellationToken);
 
         Assert.Equal(application.Id, stored.ApplicationId);
     }

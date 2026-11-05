@@ -34,16 +34,16 @@ public sealed class LogsController(IngestLogEventsService ingestLogEventsService
     /// <remarks>
     ///     The body is a JSON array of Log Events and can be compressed with gzip (<c>Content-Encoding: gzip</c>). The
     ///     Application is taken from the API Key in the header <c>X-Logbook-Key</c>. If one Log Event is not valid, none
-    ///     are accepted.
+    ///     are accepted. Accepted Log Events are written to the database shortly afterwards.
     /// </remarks>
     /// <param name="logEvents">The Log Events.</param>
-    /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
     /// <returns>202 Accepted with the number of accepted Log Events.</returns>
-    /// <response code="202">Responds with the number of accepted Log Events.</response>
+    /// <response code="202">Responds with the number of accepted Log Events, which are queued for writing.</response>
     /// <response code="400">Responds with problem details if the body is not valid, e.g. malformed JSON or gzip, an empty batch, or a Log Event that is not valid.</response>
     /// <response code="413">Responds with problem details if the body is too large, also after decompression.</response>
     /// <response code="415">Responds with problem details if the body is not JSON or the content encoding is not gzip.</response>
     /// <response code="500">Responds with problem details if an unexpected error occurred.</response>
+    /// <response code="503">Responds with problem details and a Retry-After header if the queue is full. None of the Log Events were accepted, so the batch can be sent again.</response>
     [HttpPost]
     [Authorize(AuthorizationPolicies.ApplicationApiKey)]
     [ServiceFilter<LogRequestBodyFilter>]
@@ -52,13 +52,12 @@ public sealed class LogsController(IngestLogEventsService ingestLogEventsService
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status415UnsupportedMediaType, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
-    public async Task<IActionResult> Ingest(
-        [FromBody] IReadOnlyList<LogEventRequest?> logEvents,
-        CancellationToken cancellationToken)
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json")]
+    public async Task<IActionResult> Ingest([FromBody] IReadOnlyList<LogEventRequest?> logEvents)
     {
         var applicationId = Guid.Parse(User.FindFirstValue(ApiKeyClaimTypes.ApplicationId)!, CultureInfo.InvariantCulture);
 
-        var response = await ingestLogEventsService.ExecuteAsync(applicationId, logEvents, cancellationToken);
+        var response = await ingestLogEventsService.ExecuteAsync(applicationId, logEvents);
 
         return Accepted(response);
     }

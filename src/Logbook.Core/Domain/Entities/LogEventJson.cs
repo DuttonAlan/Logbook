@@ -20,7 +20,7 @@ namespace Logbook.Core.Domain.Entities;
 /// </remarks>
 internal static class LogEventJson
 {
-    private const char ReplacementCharacter = '�';
+    private const char ReplacementCharacter = '\uFFFD';
 
     // Longer numbers are not meaningful for logs, and a long fraction can exceed the range of "numeric".
     private const int MaxNumberLength = 64;

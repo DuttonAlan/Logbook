@@ -69,7 +69,7 @@ Every Log Event belongs to an **Application**, which the server takes from the A
 - [x] Use cases and admin API to create, list, rename and delete Applications, and to issue and revoke API Keys, protected by a single configured admin key until sign-in exists (M4)
 - [x] `POST /api/v1/logs`: batched JSON, gzip support, size limits per request and per event
 - [x] API Key authentication with the header `X-Logbook-Key`
-- [ ] Ingestion queue with batched writes (`COPY` or multi-row inserts) in a background service
+- [x] Ingestion queue with batched writes (`COPY` or multi-row inserts) in a background service
 - [ ] `GET /api/v1/logs`: filter by time range, level, Application, Environment and text; cursor paging
 - [ ] Rate limits per API Key
 - [ ] Integration tests with Testcontainers; reference docs for the API

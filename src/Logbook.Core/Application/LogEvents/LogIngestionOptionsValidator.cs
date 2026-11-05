@@ -42,6 +42,21 @@ public sealed class LogIngestionOptionsValidator : IValidateOptions<LogIngestion
             failures.Add($"'{section}:{nameof(options.MaxFutureOffset)}' must not be negative and at most {MaxWindow.Days} days.");
         }
 
+        if (options.MaxQueuedBytes <= 0)
+        {
+            failures.Add($"'{section}:{nameof(options.MaxQueuedBytes)}' must be greater than 0.");
+        }
+
+        if (options.WriteBatchSize <= 0)
+        {
+            failures.Add($"'{section}:{nameof(options.WriteBatchSize)}' must be greater than 0.");
+        }
+
+        if (options.WriteInterval <= TimeSpan.Zero)
+        {
+            failures.Add($"'{section}:{nameof(options.WriteInterval)}' must be greater than 0.");
+        }
+
         return failures.Count > 0 ? ValidateOptionsResult.Fail(failures) : ValidateOptionsResult.Success;
     }
 }
