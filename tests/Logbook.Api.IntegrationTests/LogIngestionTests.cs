@@ -10,6 +10,7 @@ using System.Text.Json;
 using Logbook.Core.Abstractions;
 using Logbook.Core.Application.Applications.Create;
 using Logbook.Core.Application.LogEvents.Ingest;
+using Logbook.Core.Application.LogEvents.Search;
 using Logbook.Core.Domain.Entities;
 using Logbook.Infrastructure.Persistence;
 
@@ -524,6 +525,9 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
         Assert.Contains(indexes, index => index.Contains("\"Properties\" jsonb_path_ops", StringComparison.Ordinal));
         Assert.Contains(indexes, index => index.Contains("\"Exception\" jsonb_path_ops", StringComparison.Ordinal));
         Assert.Contains(indexes, index => index.Contains("UNIQUE", StringComparison.Ordinal));
+        Assert.Contains(indexes, index => index.Contains("(\"ApplicationId\", \"Timestamp\", \"Id\")", StringComparison.Ordinal));
+        Assert.Contains(indexes, index => index.Contains("(\"Environment\", \"Timestamp\", \"Id\")", StringComparison.Ordinal));
+        Assert.Contains(indexes, index => index.Contains("WHERE (\"Level\" >= 3)", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -585,6 +589,10 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
 
         Assert.Equal("ApiKey", Assert.Single(Assert.Single(logs.Security!)!.Keys).Reference.Id);
         Assert.Equal("Bearer", Assert.Single(Assert.Single(applications.Security!)!.Keys).Reference.Id);
+
+        var search = document.Paths["/api/v1/logs"].Operations![System.Net.Http.HttpMethod.Get];
+        Assert.Equal("Bearer", Assert.Single(Assert.Single(search.Security!)!.Keys).Reference.Id);
+        Assert.Contains(search.Parameters!, parameter => parameter.Name == "level");
     }
 
     private static string PartitionOf(DateTimeOffset timestamp) => $"telemetry.log_events_{timestamp.UtcDateTime:yyyyMMdd}";
@@ -668,6 +676,11 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
         public Task AddRange(IReadOnlyCollection<LogEvent> logEvents, CancellationToken cancellationToken = default)
         {
             return _unblocked.Task.WaitAsync(cancellationToken);
+        }
+
+        public Task<IReadOnlyList<LogEvent>> Search(LogEventFilter filter, LogEventCursor? after, int take, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
         }
     }
 

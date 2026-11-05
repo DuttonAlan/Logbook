@@ -54,6 +54,16 @@ The queue is limited by bytes rather than by number of Log Events, because a sin
 
 What happens when a write fails depends on the cause. If the database is unavailable, the batch is kept and retried with increasing delays, because every Log Event in it is still fine. If PostgreSQL refuses the data, retrying would block all writing forever, so the batch is split until the one Log Event at fault is found, and only that one is dropped. A retry can also repeat a write that succeeded but whose confirmation was lost; the primary key recognizes those Log Events, so they are stored once.
 
+## Searching Log Events
+
+Searching requires the admin key, not an API Key. An API Key lives in an application's configuration and on servers, so it is the credential most likely to leak; if it could read logs, one leak would expose everything those logs contain.
+
+Results are paged with a cursor, a position in the order of `Timestamp` and `Id`, rather than with page numbers. An offset would have to read and skip all earlier rows, so it gets slower with every page, and new Log Events would shift the results between requests. For the same reason there is no total count: on a table this size, counting is the expensive part.
+
+A search reads an index backwards from the newest Log Event until the page is full. That is fast when many Log Events match, but slow when few do, and a filter that matches nothing would read the whole table. So the filters that can match few rows have their own indexes: Application, Environment, and a small one for the levels from `Warning` up, which are rare but what people look for. Each index slows down writing, so there is deliberately none for the lower levels or for `Category`.
+
+Full-text search covers whole words without stemming. Stemming follows the rules of one language, while logs mix languages and identifiers, and `failed` being found by `fail` is worth less than `OrderService` being found exactly as written.
+
 ## The web interface
 
 `src/Logbook.Web` is a React application written in TypeScript and built with Vite. When the container image is built, its output is copied into the server's `wwwroot`, so one container serves the API and the interface from the same origin: no CORS, one address to secure. Every path that is not an API route or a file returns `index.html`, so the interface handles its own routes in the browser.

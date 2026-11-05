@@ -12,6 +12,7 @@ using Logbook.Core.Application.Applications.Rename;
 using Logbook.Core.Application.Applications.RevokeApiKey;
 using Logbook.Core.Application.LogEvents.AuthenticateApiKey;
 using Logbook.Core.Application.LogEvents.Ingest;
+using Logbook.Core.Application.LogEvents.Search;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -44,6 +45,7 @@ public static class ServiceCollectionExtensions
 
         serviceCollection.AddTransient<AuthenticateApiKeyService>();
         serviceCollection.AddTransient<IngestLogEventsService>();
+        serviceCollection.AddTransient<SearchLogEventsService>();
 
         return serviceCollection;
     }

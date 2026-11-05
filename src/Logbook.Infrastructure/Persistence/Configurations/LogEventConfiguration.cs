@@ -61,5 +61,16 @@ public sealed class LogEventConfiguration : IEntityTypeConfiguration<LogEvent>
         builder.HasIndex(x => x.Exception)
             .HasMethod("gin")
             .HasOperators("jsonb_path_ops");
+
+        // Searching reads the primary key backwards until a page is full, so the fewer rows match a filter, the longer
+        // it takes, up to the whole table if nothing matches. These indexes serve the filters that can match few rows.
+        builder.HasIndex(x => new { x.ApplicationId, x.Timestamp, x.Id });
+
+        builder.HasIndex(x => new { x.Environment, x.Timestamp, x.Id });
+
+        // 3 is LogEventLevel.Warning. These levels are rare but what people look for, and the index stays very small.
+        builder.HasIndex(x => new { x.Timestamp, x.Id })
+            .HasDatabaseName("IX_log_events_Timestamp_Id_WarningOrAbove")
+            .HasFilter("\"Level\" >= 3");
     }
 }

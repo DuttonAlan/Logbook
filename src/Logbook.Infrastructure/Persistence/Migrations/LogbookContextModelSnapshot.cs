@@ -137,6 +137,14 @@ namespace Logbook.Infrastructure.Persistence.Migrations
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Properties"), "gin");
                     NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Properties"), new[] { "jsonb_path_ops" });
 
+                    b.HasIndex("Timestamp", "Id")
+                        .HasDatabaseName("IX_log_events_Timestamp_Id_WarningOrAbove")
+                        .HasFilter("\"Level\" >= 3");
+
+                    b.HasIndex("ApplicationId", "Timestamp", "Id");
+
+                    b.HasIndex("Environment", "Timestamp", "Id");
+
                     b.ToTable("log_events", "telemetry");
                 });
 

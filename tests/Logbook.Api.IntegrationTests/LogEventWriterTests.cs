@@ -4,6 +4,7 @@
 
 using Logbook.Core.Abstractions;
 using Logbook.Core.Application.LogEvents;
+using Logbook.Core.Application.LogEvents.Search;
 using Logbook.Core.Domain.Entities;
 using Logbook.Infrastructure.Ingestion;
 
@@ -236,6 +237,11 @@ public sealed class LogEventWriterTests
             Stored.AddRange(logEvents);
 
             return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<LogEvent>> Search(LogEventFilter filter, LogEventCursor? after, int take, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
         }
     }
 

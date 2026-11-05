@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for license information.
 
 using Logbook.Core.Abstractions;
+using Logbook.Core.Application.LogEvents.Search;
 using Logbook.Core.Domain.Entities;
 
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,70 @@ public sealed class LogEventRepository(LogbookContext context) : ILogEventReposi
         COPY telemetry.log_events ("Id", "Timestamp", "ApplicationId", "Level", "Message", "MessageTemplate", "Category", "Environment", "EventId", "Exception", "TraceId", "SpanId", "Properties")
         FROM STDIN (FORMAT BINARY)
         """;
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<LogEvent>> Search(
+        LogEventFilter filter,
+        LogEventCursor? after,
+        int take,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        var query = context.LogEvents.AsNoTracking();
+
+        if (filter.From is { } from)
+        {
+            var fromUtc = from.UtcDateTime;
+            query = query.Where(logEvent => logEvent.Timestamp >= fromUtc);
+        }
+
+        if (filter.To is { } to)
+        {
+            var toUtc = to.UtcDateTime;
+            query = query.Where(logEvent => logEvent.Timestamp < toUtc);
+        }
+
+        if (filter.Levels is { Count: > 0 } levels)
+        {
+            query = query.Where(logEvent => levels.Contains(logEvent.Level));
+        }
+
+        if (filter.ApplicationId is { } applicationId)
+        {
+            query = query.Where(logEvent => logEvent.ApplicationId == applicationId);
+        }
+
+        if (filter.Environment is { } environment)
+        {
+            query = query.Where(logEvent => logEvent.Environment == environment);
+        }
+
+        if (filter.Text is { } text)
+        {
+            // Must stay the same expression as the index "IX_log_events_Message_FullText", or the index is not used.
+            // websearch_to_tsquery accepts any input, unlike to_tsquery, which fails on a syntax error.
+            query = query.Where(logEvent => EF.Functions.ToTsVector("simple", logEvent.Message)
+                .Matches(EF.Functions.WebSearchToTsQuery("simple", text)));
+        }
+
+        if (after is not null)
+        {
+            var (timestamp, id) = (after.Timestamp, after.Id);
+
+            // A row comparison, because the order is by both columns. The first condition only lets PostgreSQL skip
+            // the partitions of newer days, which it does not do for a row comparison.
+            query = query
+                .Where(logEvent => logEvent.Timestamp <= timestamp)
+                .Where(logEvent => EF.Functions.LessThan(ValueTuple.Create(logEvent.Timestamp, logEvent.Id), ValueTuple.Create(timestamp, id)));
+        }
+
+        return await query
+            .OrderByDescending(logEvent => logEvent.Timestamp)
+            .ThenByDescending(logEvent => logEvent.Id)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
 
     /// <inheritdoc/>
     public async Task AddRange(IReadOnlyCollection<LogEvent> logEvents, CancellationToken cancellationToken = default)

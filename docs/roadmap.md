@@ -70,7 +70,7 @@ Every Log Event belongs to an **Application**, which the server takes from the A
 - [x] `POST /api/v1/logs`: batched JSON, gzip support, size limits per request and per event
 - [x] API Key authentication with the header `X-Logbook-Key`
 - [x] Ingestion queue with batched writes (`COPY` or multi-row inserts) in a background service
-- [ ] `GET /api/v1/logs`: filter by time range, level, Application, Environment and text; cursor paging
+- [x] `GET /api/v1/logs`: filter by time range, level, Application, Environment and text; cursor paging
 - [ ] Rate limits per API Key
 - [ ] Integration tests with Testcontainers; reference docs for the API
 

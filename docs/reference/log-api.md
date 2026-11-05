@@ -1,8 +1,9 @@
 # Log API
 
-The log API is what applications send their Log Events to. The [SDK](../explanation/architecture.md#the-sdk) will call it for you (milestone M2); until then, you can call it directly.
+The log API is what applications send their Log Events to and what you search them with. The [SDK](../explanation/architecture.md#the-sdk) will send for you (milestone M2), and the web interface will search for you (milestone M3); until then, you can call it directly.
 
-- **Authentication:** the API Key of an Application in the header `X-Logbook-Key`. Without an active API Key the endpoint returns `401`, whatever the body contains. The admin key is not accepted. To get an API Key, see [Manage Applications and API Keys](../how-to/manage-applications.md).
+- **Authentication to send:** the API Key of an Application in the header `X-Logbook-Key`. Without an active API Key the endpoint returns `401`, whatever the body contains. The admin key is not accepted. To get an API Key, see [Manage Applications and API Keys](../how-to/manage-applications.md).
+- **Authentication to search:** the admin key from the setting [`AdminApi:Key`](configuration.md#server), as `Authorization: Bearer …`. An API Key can only send, so one that leaks from an application cannot read any logs.
 - **Format:** JSON in and out. Errors are [problem details](https://www.rfc-editor.org/rfc/rfc9457).
 - **Schema:** the OpenAPI document and Swagger UI (`/swagger`) are served in `Development`.
 
@@ -97,4 +98,86 @@ curl -X POST "$LOGBOOK_URL/api/v1/logs" \
   -H "X-Logbook-Key: $LOGBOOK_API_KEY" \
   -H "Content-Type: application/json" \
   -d "[{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"level\":\"Information\",\"message\":\"Hello Logbook\",\"environment\":\"Development\"}]"
+```
+
+## Search Log Events
+
+`GET /api/v1/logs`
+
+Returns one page of Log Events, newest first. All parameters are optional, and all filters must match.
+
+| Parameter | Description |
+|---|---|
+| `from` | Only Log Events at or after this point in time, with an offset or `Z`. |
+| `to` | Only Log Events before this point in time. Must be later than `from`. |
+| `level` | Only Log Events with this level. Repeat it for several levels: `level=Error&level=Critical`. |
+| `applicationId` | Only Log Events of this Application. |
+| `environment` | Only Log Events of this Environment, compared exactly. `Unknown` finds Log Events sent without one. At most 100 characters. |
+| `text` | Only Log Events whose message matches this [full-text search](#full-text-search). At most 500 characters. |
+| `limit` | Maximum number of Log Events on the page, from 1 to 1000. Default: `100`. |
+| `cursor` | The `nextCursor` of the previous page. |
+
+URL-encode the values. In particular, a `+` in an offset must be sent as `%2B`, or it is read as a space and rejected.
+
+The response contains the Log Events with the fields [listed above](#send-log-events), where `properties` and `exception` are JSON objects, plus `id` and `applicationId`:
+
+```json
+{
+  "items": [
+    {
+      "id": "0199d1a2-7c3e-7b4a-9f10-7c963f66afa6",
+      "applicationId": "0199d1a2-7c3e-7b4a-9f10-5c963f66afa6",
+      "timestamp": "2026-11-04T10:15:00.123Z",
+      "level": "Error",
+      "message": "Order 42 failed",
+      "messageTemplate": "Order {OrderId} failed",
+      "category": "Shop.Orders.OrderService",
+      "environment": "Production",
+      "eventId": 4001,
+      "exception": { "type": "System.InvalidOperationException", "message": "…", "stackTrace": "…", "inner": null },
+      "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "spanId": "00f067aa0ba902b7",
+      "properties": { "OrderId": 42, "UserId": "abc" }
+    }
+  ],
+  "nextCursor": "AN4cD2u1QAABmdGifD57Sp8QfJY_Zq-m"
+}
+```
+
+| Status | Description |
+|---|---|
+| `200` | The page. `items` is empty if nothing matches. An unknown `applicationId` is not an error, and Log Events of a deleted Application can still be found. |
+| `400` | A parameter is not valid, e.g. an unknown `level`, a `limit` out of range, an empty time range, or a `cursor` that Logbook did not return. |
+| `401` | The admin key is missing or not valid. |
+
+### Paging
+
+If `nextCursor` is not null, there are more Log Events: send the same request again with `cursor` set to it. Treat the value as opaque, as its format can change. There is no total count, because counting would have to read every matching Log Event.
+
+Paging is stable: Log Events that arrive while you page do not shift the results, so you see no duplicates and do not miss any that were already stored. New Log Events appear when you start again from the first page. A Log Event that arrives late, with a timestamp older than your position, is not in the pages you have left.
+
+### Full-text search
+
+`text` searches for whole words in `message`, not case-sensitive. It does not stem words or match parts of them, because logs are full of identifiers and mix languages: `fail` does not find `failed`.
+
+| Input | Finds messages with |
+|---|---|
+| `order failed` | both words, in any order |
+| `"order 42"` | this exact phrase |
+| `payment or shipped` | either word |
+| `order -failed` | `order`, but not `failed` |
+
+Any input is valid. Characters that have no meaning in a search are ignored, so input with nothing to search for, such as `!!!`, finds nothing. Empty input is treated as no filter.
+
+### Example
+
+```sh
+curl -G "$LOGBOOK_URL/api/v1/logs" \
+  -H "Authorization: Bearer $LOGBOOK_ADMIN_KEY" \
+  --data-urlencode "from=2026-11-04T00:00:00Z" \
+  --data-urlencode "level=Error" \
+  --data-urlencode "level=Critical" \
+  --data-urlencode "environment=Production" \
+  --data-urlencode 'text=order -shipped' \
+  --data-urlencode "limit=50"
 ```
