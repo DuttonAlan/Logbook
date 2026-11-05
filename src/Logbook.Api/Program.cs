@@ -11,6 +11,7 @@ using Logbook.Api.ExceptionHandling;
 using Logbook.Api.HealthChecks;
 using Logbook.Api.LogEvents;
 using Logbook.Api.OpenApi;
+using Logbook.Api.RateLimiting;
 using Logbook.Core;
 using Logbook.Core.Application.LogEvents;
 using Logbook.Infrastructure;
@@ -76,6 +77,12 @@ builder.Services.AddOptions<LogIngestionOptions>()
 builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<LogIngestionOptions>, LogIngestionOptionsValidator>());
 builder.Services.AddSingleton<LogRequestBodyFilter>();
 
+builder.Services.AddOptions<RateLimitOptions>()
+    .Bind(builder.Configuration.GetSection(RateLimitOptions.SectionName))
+    .ValidateOnStart();
+builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<RateLimitOptions>, RateLimitOptionsValidator>());
+builder.Services.AddRateLimiter(options => options.AddLogbookPolicies());
+
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
@@ -97,6 +104,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// After authorization, because the limits are per API Key, which the authorization policy authenticates.
+app.UseRateLimiter();
 
 app.MapControllers();
 

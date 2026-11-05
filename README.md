@@ -10,7 +10,7 @@ Logbook is a lightweight, self-hosted **logging solution for .NET applications**
 
 Add one NuGet package to your application, run one container, and see structured logs within minutes, without the weight of a full APM suite.
 
-> **Project status: very early.** Logbook is being built step by step; the server cannot receive logs yet. See the [roadmap](docs/roadmap.md) for what is planned and in which order.
+> **Project status: early.** Logbook is being built step by step. The server receives and searches logs through its API; the SDK and the log explorer are next. See the [roadmap](docs/roadmap.md) for what is planned and in which order.
 
 ## Features
 
@@ -51,8 +51,8 @@ Open <http://localhost:5080/>. The [Getting started tutorial](docs/tutorials/get
 The [documentation](docs/README.md) has four parts:
 
 - **Tutorials**: [Getting started](docs/tutorials/getting-started.md)
-- **How-to guides**: [run Logbook from source](docs/how-to/run-from-source.md)
-- **Reference**: [configuration](docs/reference/configuration.md), [admin API](docs/reference/admin-api.md), [health checks](docs/reference/health-checks.md)
+- **How-to guides**: [run Logbook from source](docs/how-to/run-from-source.md), [manage Applications and API Keys](docs/how-to/manage-applications.md)
+- **Reference**: [configuration](docs/reference/configuration.md), [log API](docs/reference/log-api.md), [admin API](docs/reference/admin-api.md), [health checks](docs/reference/health-checks.md)
 - **Explanation**: [architecture](docs/explanation/architecture.md)
 
 ## Roadmap
@@ -62,7 +62,7 @@ Logbook is built in milestones, each ending with something usable. Version 1.0 i
 | Milestone | Content |
 |---|---|
 | M0 | Foundations: solution, CI, container images, documentation |
-| M1 | Log API: Applications, API Keys, ingestion and query |
+| M1 ✅ | Log API: Applications, API Keys, ingestion and query |
 | M2 | C# SDK: `ILogger` provider, published to NuGet |
 | M3 | Web interface: log explorer with filters and live tail |
 | M4 | Security and operations: sign-in, retention, production guide |

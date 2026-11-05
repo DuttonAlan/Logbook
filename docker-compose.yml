@@ -15,7 +15,8 @@ services:
       POSTGRES_USER: logbook
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
-      - db-data:/var/lib/postgresql/data
+      # Since PostgreSQL 18, the image keeps its data in a versioned folder below this path.
+      - db-data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U logbook -d logbook"]
       interval: 2s

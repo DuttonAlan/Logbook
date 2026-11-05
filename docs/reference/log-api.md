@@ -64,10 +64,11 @@ Send `Content-Encoding: gzip` to compress the body. No other encoding is support
 | `401` | The API Key is missing, unknown, revoked or expired. |
 | `413` | The body is larger than `LogIngestion:MaxRequestBytes`, before or after decompression. |
 | `415` | The body is not JSON, or the content encoding is not gzip. |
+| `429` | The API Key sends too many requests, with a `Retry-After` header in seconds. None of the Log Events were accepted. See [rate limit](#rate-limit). |
 | `500` | An unexpected error. This includes the database being unavailable, because the API Key is checked there. |
-| `503` | The queue is full, with a `Retry-After` header. None of the Log Events were accepted. |
+| `503` | The queue is full, with a `Retry-After` header in seconds. None of the Log Events were accepted. |
 
-A batch is accepted as a whole. **If one Log Event is not valid, none are accepted**, and the `400` response names the position of the first invalid one, counted from 0. Sending the same batch again does not help. After a `5xx` response, send it again later: no Log Event of it was accepted, so this creates no duplicates.
+A batch is accepted as a whole. **If one Log Event is not valid, none are accepted**, and the `400` response names the position of the first invalid one, counted from 0. Sending the same batch again does not help. After a `429` or `5xx` response, send it again later: no Log Event of it was accepted, so this creates no duplicates.
 
 ### When Log Events are stored
 
@@ -90,6 +91,16 @@ Set with the [`LogIngestion` settings](configuration.md#server):
 | Memory for Log Events that are not written yet | 256 MiB (`503` if exceeded) |
 
 The time window exists because Logbook stores each day in its own partition, so a wrong clock could otherwise create any number of tables.
+
+### Rate limit
+
+Each API Key can send 6000 requests per minute, set with [`RateLimiting:ApiKeyPermitsPerMinute`](configuration.md#server). That is about 10,000 Log Events per second with batches of 100, so the limit is meant to stop a misbehaving program rather than to restrict normal use.
+
+- The limit counts requests, not Log Events, and every authenticated request counts, also one that is then rejected as invalid. To send more, put more Log Events in a batch.
+- A burst of up to the full limit is allowed after the API Key has not been used for a while. The allowance refills continuously, so after a burst an application can go on at the allowed rate rather than wait for a minute to end.
+- Each API Key has its own limit, also within one Application. Requests with an invalid API Key get `401` and do not count against any limit.
+- The limit applies per server: with several servers, an API Key can send that many requests to each one.
+- Searching is not limited.
 
 ### Example
 

@@ -62,7 +62,7 @@ Every Log Event belongs to an **Application**, which the server takes from the A
 - [x] CI: build, tests, missing-migration check, SDK packages, web interface, container images; CodeQL; Dependabot; release workflow
 - [x] Documentation (Diátaxis, VitePress), README, CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, CHANGELOG
 
-## M1: Log API
+## M1: Log API ✅
 
 - [x] Entities `Application` and `ApiKey` (only the SHA-256 hash is stored), schema `config`
 - [x] Entity `LogEvent` in schema `telemetry`, partitioned by day; `properties` and `exception` as `jsonb` with a GIN index; full-text search on `message`
@@ -71,8 +71,8 @@ Every Log Event belongs to an **Application**, which the server takes from the A
 - [x] API Key authentication with the header `X-Logbook-Key`
 - [x] Ingestion queue with batched writes (`COPY` or multi-row inserts) in a background service
 - [x] `GET /api/v1/logs`: filter by time range, level, Application, Environment and text; cursor paging
-- [ ] Rate limits per API Key
-- [ ] Integration tests with Testcontainers; reference docs for the API
+- [x] Rate limits per API Key
+- [x] Integration tests with Testcontainers; reference docs for the API
 
 ## M2: C# SDK
 

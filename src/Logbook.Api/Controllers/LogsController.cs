@@ -9,12 +9,14 @@ using System.Security.Claims;
 using Logbook.Api.Authentication;
 using Logbook.Api.Authorization;
 using Logbook.Api.LogEvents;
+using Logbook.Api.RateLimiting;
 using Logbook.Core.Application.LogEvents.Ingest;
 using Logbook.Core.Application.LogEvents.Search;
 using Logbook.Core.Domain.Entities;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Logbook.Api.Controllers;
 
@@ -93,15 +95,18 @@ public sealed class LogsController(
     /// <response code="400">Responds with problem details if the body is not valid, e.g. malformed JSON or gzip, an empty batch, or a Log Event that is not valid.</response>
     /// <response code="413">Responds with problem details if the body is too large, also after decompression.</response>
     /// <response code="415">Responds with problem details if the body is not JSON or the content encoding is not gzip.</response>
+    /// <response code="429">Responds with problem details and a Retry-After header if the API Key sends too many requests. None of the Log Events were accepted, so the batch can be sent again.</response>
     /// <response code="500">Responds with problem details if an unexpected error occurred.</response>
     /// <response code="503">Responds with problem details and a Retry-After header if the queue is full. None of the Log Events were accepted, so the batch can be sent again.</response>
     [HttpPost]
     [Authorize(AuthorizationPolicies.ApplicationApiKey)]
+    [EnableRateLimiting(RateLimitPolicies.ApiKey)]
     [ServiceFilter<LogRequestBodyFilter>]
     [ProducesResponseType<IngestLogEventsResponse>(StatusCodes.Status202Accepted, "application/json")]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status415UnsupportedMediaType, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status429TooManyRequests, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json")]
     public async Task<IActionResult> Ingest([FromBody] IReadOnlyList<LogEventRequest?> logEvents)

@@ -52,6 +52,8 @@ An accepted batch goes into a queue in memory, and a background service writes f
 
 The queue is limited by bytes rather than by number of Log Events, because a single Log Event can be hundreds of kilobytes. When it is full, requests get `503`, so the pressure moves back to the senders, whose SDKs retry and eventually drop the oldest events instead of Logbook running out of memory.
 
+The queue is shared, so one Application could fill it for all the others. That is what the rate limit per API Key is for: it stops a program that sends far too often, before its request is even read. It answers `429`, which tells that one sender to slow down, whereas `503` means that Logbook as a whole is overloaded. The limit refills continuously rather than per minute, because logs are bursty: right after a burst is often when they matter most, and an application should not lose them until the next minute starts.
+
 What happens when a write fails depends on the cause. If the database is unavailable, the batch is kept and retried with increasing delays, because every Log Event in it is still fine. If PostgreSQL refuses the data, retrying would block all writing forever, so the batch is split until the one Log Event at fault is found, and only that one is dropped. A retry can also repeat a write that succeeded but whose confirmation was lost; the primary key recognizes those Log Events, so they are stored once.
 
 ## Searching Log Events
