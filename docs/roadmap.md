@@ -85,7 +85,7 @@ Every Log Event belongs to an **Application**, which the server takes from the A
 - [x] Flush on shutdown; self-diagnostics through `EventSource`, so the SDK never logs into itself
 - [x] Tests for every failure path: server down, slow, returning errors, buffer full
 - [ ] Publish the packages to NuGet from the release workflow
-- [ ] How-to guide: connect an application
+- [x] How-to guide: connect an application
 
 ## M3: Web interface, log explorer
 

@@ -21,6 +21,7 @@ Start here if you are new to Logbook.
 
 - [Run Logbook from source](how-to/run-from-source.md)
 - [Manage Applications and API Keys](how-to/manage-applications.md)
+- [Connect an application](how-to/connect-application.md)
 
 ## Reference
 

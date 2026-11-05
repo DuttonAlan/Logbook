@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - SDK shutdown: disposing the client sends what is left, for at most the new option `ShutdownTimeout`.
 - SDK diagnostics through an `EventSource` named `Logbook-Sdk`.
 - `ILogger` provider: `builder.Logging.AddLogbook(…)` in `Logbook.Extensions.Logging` reads the section `Logbook` and sends message templates, scopes, `EventId`, inner and aggregate exceptions, and `traceId` and `spanId` from `Activity.Current`. The Environment comes from `IHostEnvironment`, unless the new option `Environment` overrides it. Its own categories and `System.Net.Http.HttpClient` are excluded, so sending cannot create more to send. See [SDK behavior](docs/reference/sdk-behavior.md).
+- How-to guide: [connect an application](docs/how-to/connect-application.md).
 
 ### Changed
 
