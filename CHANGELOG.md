@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Project foundations: server (`Logbook.Api`, `Logbook.Core`, `Logbook.Infrastructure`) on .NET 10 and PostgreSQL, web interface with React, SDK packages `Logbook.Sdk`, `Logbook.Extensions.Logging` and `Logbook.AspNetCore`.
+- Project foundations: server (`Logbook.Api`, `Logbook.Core`, `Logbook.Infrastructure`) on .NET 10 and PostgreSQL, web interface with React, SDK packages `Logbook.Sdk`, `Logbook.Extensions.Logging` and `Logbook.AspNetCore` for .NET 10 and later.
 - Health endpoints `/health` and `/health/live`.
 - Container images for the server and the database migrations, and a Docker Compose setup for local evaluation.
 - Documentation following Diátaxis, and the roadmap.
@@ -35,3 +35,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - `docker compose up` failed on a new checkout, because the database volume was mounted at the path PostgreSQL 18 images refuse.
+- `GET /api/v1/logs` returned `500` for every page containing a Log Event whose `exception` or `properties` was nested 30 levels deep. `POST /api/v1/logs` now rejects such a value with `400`, as the documented limit is 29 levels. A Log Event of this kind that was stored earlier still breaks the search until it is deleted or retention removes it.

@@ -76,11 +76,11 @@ During development the Vite server runs on its own port and forwards API calls t
 
 ## The SDK
 
-The SDK packages live in `sdk/` and are published to NuGet:
+The SDK packages live in `sdk/` and will be published to NuGet with version 1.0:
 
 | Package | Purpose |
 |---|---|
-| `Logbook.Sdk` | The client: a bounded in-memory buffer, background batching and sending, retries. Targets `netstandard2.0` and `net10.0`, so older applications can use it too. |
+| `Logbook.Sdk` | The client: a bounded in-memory buffer, background batching and sending, retries. Targets `net10.0`, so applications need .NET 10 or later. |
 | `Logbook.Extensions.Logging` | The `ILogger` provider. Existing code that logs through `ILogger` sends to Logbook without changes. |
 | `Logbook.AspNetCore` | Request, dependency and exception tracking for ASP.NET Core applications. |
 

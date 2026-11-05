@@ -44,6 +44,13 @@ public sealed class LogEvent
     /// </summary>
     public const int MessageMaxLength = 64 * 1024;
 
+    /// <summary>
+    ///     Maximum number of levels in the JSON of the Exception and the Properties, counting the object itself. The API
+    ///     reads and writes JSON up to 32 levels, and a Log Event in a search response starts at level 4, so a deeper value
+    ///     could be received but never returned.
+    /// </summary>
+    public const int MaxJsonDepth = 29;
+
     // Roughly the object itself, the headers of its strings, and its place in the queue.
     private const long MemoryOverheadBytes = 512;
 

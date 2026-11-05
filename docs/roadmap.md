@@ -23,7 +23,7 @@ Logbook is a **lightweight, self-hosted logging solution for .NET**: run one con
 | Server | ASP.NET Core with controllers, `Api → Core ← Infrastructure` like Authora |
 | Storage | PostgreSQL with EF Core and Npgsql; schemas `config` and `telemetry` |
 | Web interface | React and TypeScript with Vite, served by the server from `wwwroot` |
-| SDK | `netstandard2.0` and `net10.0`, published to NuGet |
+| SDK | `net10.0`, published to NuGet |
 | Distribution | Container images `logbook` and `logbook-migrator` on GHCR |
 | License | MIT |
 
@@ -74,7 +74,7 @@ Every Log Event belongs to an **Application**, which the server takes from the A
 - [x] Rate limits per API Key
 - [x] Integration tests with Testcontainers; reference docs for the API
 
-## M2: C# SDK
+## M2: C# SDK ✅
 
 - [x] `Logbook.Sdk`: bounded buffer limited by events and by memory, background sender, batching by size and time, gzip, drop-oldest when full
 - [x] Retries with exponential backoff and `Retry-After`, size guards with truncation
@@ -84,7 +84,6 @@ Every Log Event belongs to an **Application**, which the server takes from the A
 - [x] `traceId` and `spanId` from `Activity.Current`
 - [x] Flush on shutdown; self-diagnostics through `EventSource`, so the SDK never logs into itself
 - [x] Tests for every failure path: server down, slow, returning errors, buffer full
-- [ ] Publish the packages to NuGet from the release workflow
 - [x] How-to guide: connect an application
 
 ## M3: Web interface, log explorer
@@ -104,7 +103,7 @@ Every Log Event belongs to an **Application**, which the server takes from the A
 - [ ] Security headers, forwarded headers for reverse proxies, refusal to start with insecure production settings
 - [ ] Retention per Application: a background service drops expired partitions
 - [ ] How-to guides: deploy to production, configure a reverse proxy, upgrade, back up and restore
-- [ ] Release 1.0: images on GHCR, packages on NuGet
+- [ ] Release 1.0: images on GHCR, SDK packages published to NuGet from the release workflow
 
 ## M5: Application Insights-style telemetry
 

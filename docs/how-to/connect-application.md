@@ -2,13 +2,13 @@
 
 This guide sends the logs of a .NET application to Logbook. Existing code that logs through `ILogger` needs no changes: you add one package, one line and two settings.
 
-> The packages are not on NuGet yet, as publishing them is still [planned](../roadmap.md#m2-c-sdk). Until then, reference the project from a checkout of this repository, as shown below.
+> The packages are not on NuGet yet, as they will be [published with version 1.0](../roadmap.md). Until then, reference the project from a checkout of this repository, as shown below.
 
 ## Prerequisites
 
 - A running Logbook, e.g. from [Getting started](../tutorials/getting-started.md).
 - An API Key of an Application. To create one, see [Manage Applications and API Keys](manage-applications.md). Give each application its own Application, so that you can tell their logs apart and revoke one key without touching the others.
-- An application for `net10.0`, or for a framework that supports `netstandard2.0`, such as .NET Framework 4.6.2 or later. The examples here use a new one:
+- An application on .NET 10 or later. The examples here use a new one:
 
 ```sh
 dotnet new web -o MyApp

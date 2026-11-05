@@ -24,6 +24,26 @@ internal static class LogEventBodies
     }
 
     /// <summary>
+    ///     A JSON object that is nested through objects.
+    /// </summary>
+    /// <param name="levels">The number of levels, counting the object itself.</param>
+    /// <returns>The JSON.</returns>
+    public static string NestedObjects(int levels)
+    {
+        return string.Concat(Enumerable.Repeat("""{"a":""", levels - 1)) + "{}" + new string('}', levels - 1);
+    }
+
+    /// <summary>
+    ///     A JSON object that is nested through arrays.
+    /// </summary>
+    /// <param name="levels">The number of levels, counting the object itself.</param>
+    /// <returns>The JSON.</returns>
+    public static string NestedArrays(int levels)
+    {
+        return """{"a":""" + new string('[', levels - 1) + new string(']', levels - 1) + "}";
+    }
+
+    /// <summary>
     ///     Creates uncompressed JSON content.
     /// </summary>
     /// <param name="body">The JSON.</param>

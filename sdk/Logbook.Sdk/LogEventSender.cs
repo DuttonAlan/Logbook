@@ -121,9 +121,6 @@ internal sealed class LogEventSender : IDisposable
     /// </remarks>
     internal static HttpMessageHandler CreateDefaultHandler()
     {
-#if NETSTANDARD2_0
-        return new HttpClientHandler { AllowAutoRedirect = false };
-#else
         if (SocketsHttpHandler.IsSupported)
         {
             // With a long-lived HttpClient, the lifetime lets a server that moved to another address be found again.
@@ -131,7 +128,6 @@ internal sealed class LogEventSender : IDisposable
         }
 
         return new HttpClientHandler { AllowAutoRedirect = false };
-#endif
     }
 
     private async Task RunAsync()
@@ -343,14 +339,7 @@ internal sealed class LogEventSender : IDisposable
 
     private static int ToMilliseconds(TimeSpan delay) => (int)delay.TotalMilliseconds;
 
-    private Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken)
-    {
-#if NETSTANDARD2_0
-        return _timeProvider.Delay(delay, cancellationToken);
-#else
-        return Task.Delay(delay, _timeProvider, cancellationToken);
-#endif
-    }
+    private Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken) => Task.Delay(delay, _timeProvider, cancellationToken);
 
     private enum ResponseKind
     {

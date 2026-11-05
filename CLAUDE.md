@@ -53,7 +53,7 @@ Server: three projects with a strict dependency direction: `Logbook.Api` → `Lo
 
 Web interface: `src/Logbook.Web`, React + TypeScript with Vite. Not part of the .NET solution. The Dockerfile builds it and copies `dist/` into the Api's `wwwroot`.
 
-SDK: `sdk/` holds the NuGet packages; shared package settings are in `sdk/Directory.Build.props`. `Logbook.Sdk` (netstandard2.0 + net10.0) is the client: bounded in-memory buffer, background batching, retries. `Logbook.Extensions.Logging` is the `ILogger` provider, `Logbook.AspNetCore` adds request and dependency tracking. The SDK never references the server projects. It must never throw into or block the host application.
+SDK: `sdk/` holds the NuGet packages; shared package settings are in `sdk/Directory.Build.props`. `Logbook.Sdk` (net10.0, like all SDK packages) is the client: bounded in-memory buffer, background batching, retries. `Logbook.Extensions.Logging` is the `ILogger` provider, `Logbook.AspNetCore` adds request and dependency tracking. The SDK never references the server projects. It must never throw into or block the host application.
 
 ### Errors
 
@@ -71,7 +71,7 @@ Services throw `NotFoundException` (404), `ConflictException` (409), `DomainVali
 ### Tests
 
 - `tests/Logbook.Api.IntegrationTests`: `LogbookApiFactory` (`WebApplicationFactory<Program>`) starts a PostgreSQL container, migrates it and runs in environment `Testing`. `MigrationTests` checks for model changes without a migration and needs no database.
-- `tests/Logbook.Sdk.Tests`: unit tests of the SDK without a server. `tests/Logbook.Sdk.Tests.NetStandard` compiles the same files against the `netstandard2.0` build of the SDK; add nothing to it.
+- `tests/Logbook.Sdk.Tests`: unit tests of the SDK without a server.
 - `SdkEndToEndTests` in the integration tests sends through the real SDK to the real server, so the format of the requests cannot drift apart unnoticed.
 - Test-wide build settings live in `tests/Directory.Build.props`.
 
