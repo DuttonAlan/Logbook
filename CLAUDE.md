@@ -12,7 +12,7 @@ Never run `git commit`, `git pull` or `git push`. Leave all changes uncommitted 
 
 ```sh
 dotnet build Logbook.slnx                      # warnings are errors (TreatWarningsAsErrors + EnforceCodeStyleInBuild)
-dotnet test --solution Logbook.slnx            # all tests; the integration tests need Docker (Testcontainers starts postgres:17-alpine)
+dotnet test --solution Logbook.slnx            # all tests; the integration tests need Docker (Testcontainers starts postgres:18-alpine)
 
 # Single test class / method (xunit v3 on Microsoft.Testing.Platform, see global.json)
 dotnet test --project tests/Logbook.Api.IntegrationTests --filter-class "*HealthEndpointTests"
@@ -57,7 +57,7 @@ SDK: `sdk/` holds the NuGet packages; shared package settings are in `sdk/Direct
 
 ### Errors
 
-Services throw `NotFoundException` (404), `ConflictException` (409), `DomainValidationException` (400) or `ServiceBusyException` (503 with `Retry-After`); `ProblemDetailsExceptionHandler` maps them, plus unique-violation and concurrency `DbUpdateException`s, to 409. `InvalidOperationException`/`ArgumentException` are intentionally **not** mapped and stay 500 — don't throw them for business-rule violations.
+Services throw `NotFoundException` (404), `ConflictException` (409), `DomainValidationException` (400) or `ServiceBusyException` (503 with `Retry-After`); `ProblemDetailsExceptionHandler` maps them, plus unique-violation and concurrency `DbUpdateException`s, to 409, and a database that cannot be reached to 503. `InvalidOperationException`/`ArgumentException` are intentionally **not** mapped and stay 500 — don't throw them for business-rule violations.
 
 ### Conventions
 

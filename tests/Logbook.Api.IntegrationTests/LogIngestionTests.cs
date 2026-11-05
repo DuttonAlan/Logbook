@@ -682,6 +682,11 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
         {
             throw new NotSupportedException();
         }
+
+        public Task<long> DeleteByApplication(Guid applicationId, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     /// <summary>

@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 
+using Logbook.Api.RateLimiting;
 using Logbook.Core.Application.LogEvents.AuthenticateApiKey;
 
 using Microsoft.AspNetCore.Authentication;
@@ -25,11 +26,15 @@ namespace Logbook.Api.Authentication;
 /// <param name="logger">The LoggerFactory of the handler.</param>
 /// <param name="encoder">The UrlEncoder of the handler.</param>
 /// <param name="authenticateApiKeyService">The Service to check the API Key.</param>
+/// <param name="invalidApiKeyLimiter">The limit for API Keys that are not valid.</param>
+/// <param name="rateLimitReporter">Reports when that limit is reached.</param>
 public sealed class ApiKeyAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    AuthenticateApiKeyService authenticateApiKeyService)
+    AuthenticateApiKeyService authenticateApiKeyService,
+    InvalidApiKeyLimiter invalidApiKeyLimiter,
+    RateLimitReporter rateLimitReporter)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     /// <summary>
@@ -42,6 +47,8 @@ public sealed class ApiKeyAuthenticationHandler(
     /// </summary>
     public const string HeaderName = "X-Logbook-Key";
 
+    private const string RetryAfterItem = "Logbook.InvalidApiKeyRetryAfter";
+
     /// <inheritdoc/>
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
@@ -52,10 +59,22 @@ public sealed class ApiKeyAuthenticationHandler(
             return AuthenticateResult.NoResult();
         }
 
+        var ipAddress = Context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        if (invalidApiKeyLimiter.IsOverLimit(ipAddress, out var retryAfter))
+        {
+            rateLimitReporter.TooManyInvalidApiKeys(ipAddress);
+            Context.Items[RetryAfterItem] = retryAfter;
+
+            return AuthenticateResult.Fail("Too many API Keys that are not valid.");
+        }
+
         var apiKey = await authenticateApiKeyService.ExecuteAsync(key, Context.RequestAborted);
 
         if (apiKey is null)
         {
+            invalidApiKeyLimiter.RecordFailure(ipAddress);
+
             return AuthenticateResult.Fail("The API Key is not active.");
         }
 
@@ -72,6 +91,14 @@ public sealed class ApiKeyAuthenticationHandler(
     /// <inheritdoc/>
     protected override Task HandleChallengeAsync(AuthenticationProperties properties)
     {
+        if (Context.Items.TryGetValue(RetryAfterItem, out var retryAfter))
+        {
+            return RateLimitPolicies.WriteTooManyRequestsAsync(
+                Context,
+                (TimeSpan?)retryAfter,
+                "Too many requests with an API Key that is not valid. Send them again later.");
+        }
+
         Response.StatusCode = StatusCodes.Status401Unauthorized;
         Response.Headers.Append(HeaderNames.WWWAuthenticate, HeaderName);
 

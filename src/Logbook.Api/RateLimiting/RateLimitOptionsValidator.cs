@@ -16,9 +16,18 @@ public sealed class RateLimitOptionsValidator : IValidateOptions<RateLimitOption
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        return options.ApiKeyPermitsPerMinute is < 1 or > RateLimitOptions.MaxPermitsPerMinute
-            ? ValidateOptionsResult.Fail(
-                $"'{RateLimitOptions.SectionName}:{nameof(RateLimitOptions.ApiKeyPermitsPerMinute)}' must be between 1 and {RateLimitOptions.MaxPermitsPerMinute}.")
-            : ValidateOptionsResult.Success;
+        var failures = new List<string>();
+
+        if (options.ApiKeyPermitsPerMinute is < 1 or > RateLimitOptions.MaxPermitsPerMinute)
+        {
+            failures.Add($"'{RateLimitOptions.SectionName}:{nameof(RateLimitOptions.ApiKeyPermitsPerMinute)}' must be between 1 and {RateLimitOptions.MaxPermitsPerMinute}.");
+        }
+
+        if (options.InvalidApiKeyPermitsPerMinute is < 1 or > RateLimitOptions.MaxPermitsPerMinute)
+        {
+            failures.Add($"'{RateLimitOptions.SectionName}:{nameof(RateLimitOptions.InvalidApiKeyPermitsPerMinute)}' must be between 1 and {RateLimitOptions.MaxPermitsPerMinute}.");
+        }
+
+        return failures.Count > 0 ? ValidateOptionsResult.Fail(failures) : ValidateOptionsResult.Success;
     }
 }

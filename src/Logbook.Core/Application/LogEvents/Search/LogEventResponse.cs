@@ -12,7 +12,7 @@ namespace Logbook.Core.Application.LogEvents.Search;
 ///     Represents a stored Log Event.
 /// </summary>
 /// <param name="Id" example="0199d1a2-7c3e-7b4a-9f10-7c963f66afa6">Id of the Log Event.</param>
-/// <param name="ApplicationId" example="0199d1a2-7c3e-7b4a-9f10-5c963f66afa6">Id of the Application that sent the Log Event. The Application may have been deleted since.</param>
+/// <param name="ApplicationId" example="0199d1a2-7c3e-7b4a-9f10-5c963f66afa6">Id of the Application that sent the Log Event.</param>
 /// <param name="Timestamp" example="2026-11-04T10:15:00.123Z">Point in time (UTC) when the Log Event occurred.</param>
 /// <param name="Level" example="Error">Severity of the Log Event.</param>
 /// <param name="Message" example="Order 42 failed">The rendered message.</param>

@@ -82,6 +82,8 @@ builder.Services.AddOptions<RateLimitOptions>()
     .ValidateOnStart();
 builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<RateLimitOptions>, RateLimitOptionsValidator>());
 builder.Services.AddRateLimiter(options => options.AddLogbookPolicies());
+builder.Services.AddSingleton<InvalidApiKeyLimiter>();
+builder.Services.AddSingleton<RateLimitReporter>();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);

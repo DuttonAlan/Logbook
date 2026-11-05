@@ -24,4 +24,11 @@ public sealed class RateLimitOptions
     ///     API Key was not used for a while. Defaults to 6000, about 10,000 Log Events per second with batches of 100.
     /// </summary>
     public int ApiKeyPermitsPerMinute { get; set; } = 6000;
+
+    /// <summary>
+    ///     Requests per minute with an API Key that is not valid, per IP address and server. Each one costs a lookup in the
+    ///     database. Above this, all requests with an API Key from that IP address are rejected. Defaults to 600, far above
+    ///     what a misconfigured application sends.
+    /// </summary>
+    public int InvalidApiKeyPermitsPerMinute { get; set; } = 600;
 }

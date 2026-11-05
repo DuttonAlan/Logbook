@@ -243,6 +243,11 @@ public sealed class LogEventWriterTests
         {
             throw new NotSupportedException();
         }
+
+        public Task<long> DeleteByApplication(Guid applicationId, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     private sealed class RecordingLogger<T> : ILogger<T>

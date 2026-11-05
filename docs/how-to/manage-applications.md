@@ -72,7 +72,7 @@ curl -X DELETE "$LOGBOOK_URL/api/v1/applications/$APPLICATION_ID" \
   -H "Authorization: Bearer $LOGBOOK_ADMIN_KEY"
 ```
 
-This also deletes its API Keys and cannot be undone. Its Log Events are not deleted: they stay in the database and can still be found with the Id of the Application.
+This also deletes its API Keys and all its Log Events, and cannot be undone. Log Events still waiting to be written are discarded as well. With many Log Events the request can take a while; if it is interrupted, for example by the timeout of a reverse proxy, send it again to finish deleting them.
 
 ## Change the admin key
 

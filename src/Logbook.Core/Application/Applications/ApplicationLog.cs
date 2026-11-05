@@ -25,4 +25,7 @@ internal static partial class ApplicationLog
 
     [LoggerMessage(EventId = 1005, Level = LogLevel.Warning, Message = "API Key {ApiKeyId} of Application {ApplicationId} was revoked.")]
     public static partial void ApiKeyRevoked(this ILogger logger, Guid applicationId, Guid apiKeyId);
+
+    [LoggerMessage(EventId = 1006, Level = LogLevel.Warning, Message = "{Count} Log Events of Application {ApplicationId} were deleted.")]
+    public static partial void LogEventsOfApplicationDeleted(this ILogger logger, Guid applicationId, long count);
 }

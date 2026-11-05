@@ -13,12 +13,20 @@ namespace Logbook.Core.Abstractions;
 public interface ILogEventRepository
 {
     /// <summary>
-    ///     Stores Log Events: either all of them or none.
+    ///     Stores Log Events: either all of them or none. Log Events of an Application that no longer exists are discarded.
     /// </summary>
     /// <param name="logEvents">The Log Events to store.</param>
     /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
     /// <returns>A Task that completes once the Log Events are stored.</returns>
     public Task AddRange(IReadOnlyCollection<LogEvent> logEvents, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Deletes all Log Events of an Application, in several steps. If it is interrupted, calling it again finishes it.
+    /// </summary>
+    /// <param name="applicationId">Id of the Application.</param>
+    /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
+    /// <returns>The number of deleted Log Events.</returns>
+    public Task<long> DeleteByApplication(Guid applicationId, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Searches Log Events, newest first.

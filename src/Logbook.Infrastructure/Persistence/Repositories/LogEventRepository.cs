@@ -18,6 +18,8 @@ namespace Logbook.Infrastructure.Persistence.Repositories;
 /// <param name="context">The DbContext to access the Log Events.</param>
 public sealed class LogEventRepository(LogbookContext context) : ILogEventRepository
 {
+    private const int DeleteBatchSize = 10_000;
+
     // A new property of LogEvent must be added here and in AddRange: COPY does not use the EF Core model.
     private const string CopyCommand = """
         COPY telemetry.log_events ("Id", "Timestamp", "ApplicationId", "Level", "Message", "MessageTemplate", "Category", "Environment", "EventId", "Exception", "TraceId", "SpanId", "Properties")
@@ -106,10 +108,13 @@ public sealed class LogEventRepository(LogbookContext context) : ILogEventReposi
         {
             var connection = (NpgsqlConnection)context.Database.GetDbConnection();
 
-            // All rows are stored by CompleteAsync, or none if it is not reached.
+            await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+
+            var existing = await LockExistingApplicationsAsync(logEvents, cancellationToken);
+
             await using var importer = await connection.BeginBinaryImportAsync(CopyCommand, cancellationToken);
 
-            foreach (var logEvent in logEvents)
+            foreach (var logEvent in logEvents.Where(logEvent => existing.Contains(logEvent.ApplicationId)))
             {
                 await importer.StartRowAsync(cancellationToken);
                 await importer.WriteAsync(logEvent.Id, NpgsqlDbType.Uuid, cancellationToken);
@@ -128,10 +133,50 @@ public sealed class LogEventRepository(LogbookContext context) : ILogEventReposi
             }
 
             await importer.CompleteAsync(cancellationToken);
+            await importer.CloseAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
         finally
         {
             await context.Database.CloseConnectionAsync();
         }
+    }
+
+    /// <inheritdoc/>
+    public async Task<long> DeleteByApplication(Guid applicationId, CancellationToken cancellationToken = default)
+    {
+        var total = 0L;
+        int deleted;
+
+        // In small transactions: progress is kept if the request ends early, and other work is not blocked for long.
+        do
+        {
+            deleted = await context.LogEvents
+                .Where(logEvent => logEvent.ApplicationId == applicationId)
+                .Take(DeleteBatchSize)
+                .ExecuteDeleteAsync(cancellationToken);
+
+            total += deleted;
+        }
+        while (deleted == DeleteBatchSize);
+
+        return total;
+    }
+
+    /// <summary>
+    ///     Finds which Applications of the Log Events still exist, and keeps them from being deleted until the transaction
+    ///     ends. Log Events wait in the queue for a while, so their Application can be deleted in the meantime. The lock
+    ///     makes the deletion wait for this write, so it also removes these Log Events, while a later write finds no
+    ///     Application and discards them. Either way, none remain without an Application.
+    /// </summary>
+    private async Task<HashSet<Guid>> LockExistingApplicationsAsync(IReadOnlyCollection<LogEvent> logEvents, CancellationToken cancellationToken)
+    {
+        var ids = logEvents.Select(logEvent => logEvent.ApplicationId).Distinct().ToArray();
+
+        var existing = await context.Database
+            .SqlQuery<Guid>($"""SELECT "Id" AS "Value" FROM config.applications WHERE "Id" = ANY({ids}) FOR KEY SHARE""")
+            .ToListAsync(cancellationToken);
+
+        return [.. existing];
     }
 }

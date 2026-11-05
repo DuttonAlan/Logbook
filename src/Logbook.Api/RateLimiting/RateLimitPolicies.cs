@@ -68,19 +68,21 @@ internal static class RateLimitPolicies
         };
     }
 
-    private static async ValueTask WriteRejectionAsync(OnRejectedContext context, CancellationToken cancellationToken)
+    /// <summary>
+    ///     Writes the response to a request rejected by a rate limit.
+    /// </summary>
+    /// <param name="httpContext">The request.</param>
+    /// <param name="retryAfter">How long the client should wait, if known.</param>
+    /// <param name="detail">The explanation for the client.</param>
+    /// <returns>A Task that completes once the response is written.</returns>
+    public static async Task WriteTooManyRequestsAsync(HttpContext httpContext, TimeSpan? retryAfter, string detail)
     {
-        var httpContext = context.HttpContext;
+        httpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
 
-        httpContext.RequestServices
-            .GetRequiredService<ILoggerFactory>()
-            .CreateLogger(typeof(RateLimitPolicies).FullName!)
-            .RequestRejected(httpContext.User.FindFirstValue(ApiKeyClaimTypes.ApiKeyId));
-
-        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        if (retryAfter is { } delay)
         {
             httpContext.Response.Headers[HeaderNames.RetryAfter] =
-                Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
+                Math.Max(1, (int)Math.Ceiling(delay.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
         }
 
         await httpContext.RequestServices.GetRequiredService<IProblemDetailsService>().WriteAsync(new ProblemDetailsContext
@@ -89,8 +91,22 @@ internal static class RateLimitPolicies
             ProblemDetails = new ProblemDetails
             {
                 Status = StatusCodes.Status429TooManyRequests,
-                Detail = "This API Key sends too many requests. Send them again later."
+                Detail = detail
             }
         });
+    }
+
+    private static async ValueTask WriteRejectionAsync(OnRejectedContext context, CancellationToken cancellationToken)
+    {
+        var httpContext = context.HttpContext;
+
+        httpContext.RequestServices
+            .GetRequiredService<RateLimitReporter>()
+            .ApiKeyOverLimit(httpContext.User.FindFirstValue(ApiKeyClaimTypes.ApiKeyId)!);
+
+        await WriteTooManyRequestsAsync(
+            httpContext,
+            context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter) ? retryAfter : null,
+            "This API Key sends too many requests. Send them again later.");
     }
 }

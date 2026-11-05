@@ -12,6 +12,7 @@ using Logbook.Core.Application.Applications.Create;
 using Logbook.Core.Application.LogEvents.Search;
 
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Logbook.Api.IntegrationTests;
@@ -94,7 +95,7 @@ public sealed class RateLimitTests(LogbookApiFactory factory) : IClassFixture<Lo
     }
 
     [Fact]
-    public async Task InvalidApiKeys_AreUnauthorized_AndNeverLimited()
+    public async Task InvalidApiKeys_DoNotCountAgainstTheLimitOfAnApiKey()
     {
         await using var limited = WithLimit(1);
         using var client = CreateSender(limited, "not-a-valid-key");
@@ -103,6 +104,125 @@ public sealed class RateLimitTests(LogbookApiFactory factory) : IClassFixture<Lo
         {
             Assert.Equal(HttpStatusCode.Unauthorized, await SendAsync(client, "x"));
         }
+    }
+
+    [Fact]
+    public async Task TooManyInvalidApiKeys_FromOneIpAddress_AreRejected_AlsoForValidApiKeys()
+    {
+        await using var limited = factory.WithWebHostBuilder(builder => builder.UseSetting("RateLimiting:InvalidApiKeyPermitsPerMinute", "2"));
+        var application = await CreateApplicationAsync();
+        using var invalid = CreateSender(limited, "not-a-valid-key");
+        using var valid = CreateSender(limited, application.ApiKey.Key);
+
+        Assert.Equal(HttpStatusCode.Accepted, await SendAsync(valid, "before"));
+        Assert.Equal(HttpStatusCode.Unauthorized, await SendAsync(invalid, "x"));
+        Assert.Equal(HttpStatusCode.Unauthorized, await SendAsync(invalid, "x"));
+
+        using var content = LogEventBodies.Json(Body("x"));
+        using var rejected = await invalid.PostAsync(Endpoint, content, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+        Assert.Equal("application/problem+json", rejected.Content.Headers.ContentType?.MediaType);
+        Assert.InRange(rejected.Headers.RetryAfter!.Delta!.Value, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30));
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, await SendAsync(valid, "after"));
+    }
+
+    [Fact]
+    public async Task ValidApiKeys_DoNotUseUpTheLimitForInvalidApiKeys()
+    {
+        await using var limited = factory.WithWebHostBuilder(builder => builder.UseSetting("RateLimiting:InvalidApiKeyPermitsPerMinute", "1"));
+        var application = await CreateApplicationAsync();
+        using var valid = CreateSender(limited, application.ApiKey.Key);
+
+        for (var i = 0; i < 5; i++)
+        {
+            Assert.Equal(HttpStatusCode.Accepted, await SendAsync(valid, "fine"));
+        }
+    }
+
+    [Fact]
+    public async Task RequestsWithoutAnApiKey_AreUnauthorized_EvenOverTheLimit()
+    {
+        await using var limited = factory.WithWebHostBuilder(builder => builder.UseSetting("RateLimiting:InvalidApiKeyPermitsPerMinute", "1"));
+        using var invalid = CreateSender(limited, "not-a-valid-key");
+        using var anonymous = limited.CreateClient();
+        using var content = LogEventBodies.Json(Body("x"));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, await SendAsync(invalid, "x"));
+        Assert.Equal(HttpStatusCode.TooManyRequests, await SendAsync(invalid, "x"));
+
+        using var response = await anonymous.PostAsync(Endpoint, content, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public void InvalidApiKeyLimiter_StaysOverTheLimit_WhileTheBucketHoldsOnlyAFractionOfAToken()
+    {
+        var clock = new ManualTimeProvider();
+        var limiter = new InvalidApiKeyLimiter(Options.Create(new RateLimitOptions { InvalidApiKeyPermitsPerMinute = 60 }), clock);
+
+        for (var i = 0; i < 60; i++)
+        {
+            Assert.False(limiter.IsOverLimit("192.0.2.1", out _));
+            limiter.RecordFailure("192.0.2.1");
+        }
+
+        Assert.True(limiter.IsOverLimit("192.0.2.1", out var retryAfter));
+        Assert.Equal(TimeSpan.FromSeconds(1), retryAfter);
+
+        // Half a token: more than nothing, but not enough for another try.
+        clock.Advance(TimeSpan.FromMilliseconds(500));
+        Assert.True(limiter.IsOverLimit("192.0.2.1", out retryAfter));
+        Assert.Equal(TimeSpan.FromMilliseconds(500), retryAfter);
+
+        clock.Advance(TimeSpan.FromMilliseconds(500));
+        Assert.False(limiter.IsOverLimit("192.0.2.1", out _));
+
+        limiter.RecordFailure("192.0.2.1");
+        Assert.True(limiter.IsOverLimit("192.0.2.1", out _));
+    }
+
+    [Fact]
+    public void InvalidApiKeyLimiter_KeepsAddressesApart_AndCheckingUsesUpNothing()
+    {
+        var limiter = new InvalidApiKeyLimiter(Options.Create(new RateLimitOptions { InvalidApiKeyPermitsPerMinute = 2 }), new ManualTimeProvider());
+
+        limiter.RecordFailure("192.0.2.1");
+
+        for (var i = 0; i < 10; i++)
+        {
+            Assert.False(limiter.IsOverLimit("192.0.2.1", out _));
+        }
+
+        limiter.RecordFailure("192.0.2.1");
+
+        Assert.True(limiter.IsOverLimit("192.0.2.1", out _));
+        Assert.False(limiter.IsOverLimit("2001:db8::1", out _));
+    }
+
+    [Fact]
+    public void Reporter_WarnsOncePerMinuteForEachSender_AndNeverWithAKey()
+    {
+        var clock = new ManualTimeProvider();
+        var logger = new CountingLogger();
+        var reporter = new RateLimitReporter(clock, logger);
+
+        reporter.ApiKeyOverLimit("first");
+        reporter.ApiKeyOverLimit("first");
+        reporter.ApiKeyOverLimit("second");
+        reporter.TooManyInvalidApiKeys("192.0.2.1");
+        reporter.TooManyInvalidApiKeys("192.0.2.1");
+        Assert.Equal(3, logger.Warnings);
+
+        clock.Advance(TimeSpan.FromSeconds(59));
+        reporter.ApiKeyOverLimit("first");
+        Assert.Equal(3, logger.Warnings);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        reporter.ApiKeyOverLimit("first");
+        Assert.Equal(4, logger.Warnings);
     }
 
     [Fact]
@@ -141,12 +261,14 @@ public sealed class RateLimitTests(LogbookApiFactory factory) : IClassFixture<Lo
     }
 
     [Theory]
-    [InlineData("0")]
-    [InlineData("-1")]
-    [InlineData("1000001")]
-    public void Startup_WithInvalidLimit_Fails(string limit)
+    [InlineData("ApiKeyPermitsPerMinute", "0")]
+    [InlineData("ApiKeyPermitsPerMinute", "-1")]
+    [InlineData("ApiKeyPermitsPerMinute", "1000001")]
+    [InlineData("InvalidApiKeyPermitsPerMinute", "0")]
+    [InlineData("InvalidApiKeyPermitsPerMinute", "1000001")]
+    public void Startup_WithInvalidLimit_Fails(string setting, string limit)
     {
-        using var misconfigured = factory.WithWebHostBuilder(builder => builder.UseSetting("RateLimiting:ApiKeyPermitsPerMinute", limit));
+        using var misconfigured = factory.WithWebHostBuilder(builder => builder.UseSetting($"RateLimiting:{setting}", limit));
 
         Assert.Throws<OptionsValidationException>(() => misconfigured.CreateClient());
     }
@@ -226,6 +348,36 @@ public sealed class RateLimitTests(LogbookApiFactory factory) : IClassFixture<Lo
             }
 
             await Task.Delay(25, TestContext.Current.CancellationToken);
+        }
+    }
+
+    private sealed class ManualTimeProvider : TimeProvider
+    {
+        private DateTimeOffset _now = new(2026, 11, 5, 10, 0, 0, TimeSpan.Zero);
+
+        public void Advance(TimeSpan by) => _now += by;
+
+        public override DateTimeOffset GetUtcNow() => _now;
+    }
+
+    private sealed class CountingLogger : ILogger<RateLimitReporter>
+    {
+        public int Warnings { get; private set; }
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull
+        {
+            return null;
+        }
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Warning)
+            {
+                Warnings++;
+            }
         }
     }
 }

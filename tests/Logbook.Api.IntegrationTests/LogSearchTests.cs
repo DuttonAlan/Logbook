@@ -352,22 +352,6 @@ public sealed class LogSearchTests(LogbookApiFactory factory) : IClassFixture<Lo
         Assert.Equal("Production", item.Environment);
     }
 
-    [Fact]
-    public async Task Search_FindsLogEventsOfADeletedApplication()
-    {
-        var application = await CreateApplicationAsync();
-        using var sender = CreateSender(application);
-        await SendAsync(sender, Events(("orphan", DateTimeOffset.UtcNow)));
-        await WaitForAsync(1, application.Id);
-
-        using var deleted = await _admin.DeleteAsync($"/api/v1/applications/{application.Id}", TestContext.Current.CancellationToken);
-        Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
-
-        var page = await SearchAsync($"applicationId={application.Id}");
-
-        Assert.Equal("orphan", Assert.Single(page.Items).Message);
-    }
-
     [Theory]
     [InlineData("level=Fatal")]
     [InlineData("level=99")]

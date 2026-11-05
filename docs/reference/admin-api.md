@@ -3,7 +3,7 @@
 The admin API manages the Applications that send logs to Logbook and their API Keys. To use it step by step, see [Manage Applications and API Keys](../how-to/manage-applications.md).
 
 - **Authentication:** the admin key from the setting [`AdminApi:Key`](configuration.md#server), as `Authorization: Bearer …`. Without a valid key every endpoint returns `401`. API Keys of Applications are not accepted. The admin key is replaced by sign-in in milestone M4.
-- **Format:** JSON in and out; points in time in UTC. Errors are [problem details](https://www.rfc-editor.org/rfc/rfc9457): `400` (validation), `401`, `404`, `409` (conflict with the current state), `415` (a request body that is not JSON).
+- **Format:** JSON in and out; points in time in UTC. Errors are [problem details](https://www.rfc-editor.org/rfc/rfc9457): `400` (validation), `401`, `404`, `409` (conflict with the current state), `415` (a request body that is not JSON), `503` (the database cannot be reached, with a `Retry-After` header).
 - **Schema:** the OpenAPI document and Swagger UI (`/swagger`) are served in `Development`.
 
 ## Applications
@@ -14,7 +14,7 @@ The admin API manages the Applications that send logs to Logbook and their API K
 | `GET /api/v1/applications` | `200` | List, ordered by name. Returns a plain JSON array of `id`, `name` and `createdAt`. |
 | `GET /api/v1/applications/{id}` | `200` | Details, including the metadata of all API Keys. `404` if unknown. |
 | `PUT /api/v1/applications/{id}` | `204` | Rename, with `name`. API Keys stay valid. `404` if unknown, `409` if the name is taken. |
-| `DELETE /api/v1/applications/{id}` | `204` | Delete, together with its API Keys. Its Log Events are not deleted. Also succeeds if the Application does not exist. |
+| `DELETE /api/v1/applications/{id}` | `204` | Delete, together with its API Keys and Log Events. Also succeeds if the Application does not exist. With many Log Events this can take a while. If the request is interrupted, send it again to finish deleting them. |
 
 An Application's `name` has 1 to 100 characters, is trimmed, and must be unique. Names are compared exactly, so `Shop` and `shop` are different names.
 

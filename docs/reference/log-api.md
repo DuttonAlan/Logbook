@@ -64,9 +64,9 @@ Send `Content-Encoding: gzip` to compress the body. No other encoding is support
 | `401` | The API Key is missing, unknown, revoked or expired. |
 | `413` | The body is larger than `LogIngestion:MaxRequestBytes`, before or after decompression. |
 | `415` | The body is not JSON, or the content encoding is not gzip. |
-| `429` | The API Key sends too many requests, with a `Retry-After` header in seconds. None of the Log Events were accepted. See [rate limit](#rate-limit). |
-| `500` | An unexpected error. This includes the database being unavailable, because the API Key is checked there. |
-| `503` | The queue is full, with a `Retry-After` header in seconds. None of the Log Events were accepted. |
+| `429` | Too many requests from this API Key, or too many invalid API Keys from this IP address, with a `Retry-After` header in seconds. None of the Log Events were accepted. See [rate limit](#rate-limit). |
+| `500` | An unexpected error. |
+| `503` | The queue is full, or the database cannot be reached to check the API Key, with a `Retry-After` header in seconds. None of the Log Events were accepted. |
 
 A batch is accepted as a whole. **If one Log Event is not valid, none are accepted**, and the `400` response names the position of the first invalid one, counted from 0. Sending the same batch again does not help. After a `429` or `5xx` response, send it again later: no Log Event of it was accepted, so this creates no duplicates.
 
@@ -98,9 +98,12 @@ Each API Key can send 6000 requests per minute, set with [`RateLimiting:ApiKeyPe
 
 - The limit counts requests, not Log Events, and every authenticated request counts, also one that is then rejected as invalid. To send more, put more Log Events in a batch.
 - A burst of up to the full limit is allowed after the API Key has not been used for a while. The allowance refills continuously, so after a burst an application can go on at the allowed rate rather than wait for a minute to end.
-- Each API Key has its own limit, also within one Application. Requests with an invalid API Key get `401` and do not count against any limit.
+- Each API Key has its own limit, also within one Application.
 - The limit applies per server: with several servers, an API Key can send that many requests to each one.
 - Searching is not limited.
+- A rejected API Key is logged as a warning with its Id, at most once per minute.
+
+Invalid API Keys have a separate limit, because each one costs a lookup in the database: 600 per minute for each IP address, set with [`RateLimiting:InvalidApiKeyPermitsPerMinute`](configuration.md#server). Valid API Keys do not count against it. Above the limit, **all** requests with an API Key from that IP address get `429` until the allowance refills, because an API Key cannot be checked without the lookup. Behind a reverse proxy, all clients share the address of the proxy until forwarded headers are supported (milestone M4), so one client flooding Logbook with invalid API Keys would also block the others. The IP address is logged as a warning, at most once per minute.
 
 ### Example
 
@@ -157,9 +160,10 @@ The response contains the Log Events with the fields [listed above](#send-log-ev
 
 | Status | Description |
 |---|---|
-| `200` | The page. `items` is empty if nothing matches. An unknown `applicationId` is not an error, and Log Events of a deleted Application can still be found. |
+| `200` | The page. `items` is empty if nothing matches. An unknown `applicationId` is not an error. |
 | `400` | A parameter is not valid, e.g. an unknown `level`, a `limit` out of range, an empty time range, or a `cursor` that Logbook did not return. |
 | `401` | The admin key is missing or not valid. |
+| `503` | The database cannot be reached, with a `Retry-After` header in seconds. |
 
 ### Paging
 

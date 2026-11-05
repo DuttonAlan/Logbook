@@ -15,8 +15,9 @@ namespace Logbook.Infrastructure.Persistence.Configurations;
 /// <remarks>
 ///     EF Core cannot express parts of this table, so the migration <c>AddLogEvents</c> creates them by hand: the
 ///     partitioning by day, the function that creates partitions, and the full-text index on the Message.
-///     There is deliberately no foreign key to the Application: it would be checked for every inserted row, and deleting
-///     an Application would have to search all partitions. Log Events are removed by retention instead.
+///     There is deliberately no foreign key to the Application: a cascade would delete all its Log Events in one long
+///     transaction. <c>DeleteApplicationService</c> deletes them in steps instead, and <c>LogEventRepository</c> checks
+///     that the Application exists once per batch rather than for every row.
 /// </remarks>
 public sealed class LogEventConfiguration : IEntityTypeConfiguration<LogEvent>
 {

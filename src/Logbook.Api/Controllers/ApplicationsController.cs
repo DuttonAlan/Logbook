@@ -80,8 +80,9 @@ public sealed class ApplicationsController(
     ///     Deletes the Application based on the given Id.
     /// </summary>
     /// <remarks>
-    ///     The Application is removed together with its API Keys. Its Log Events are not removed.
-    ///     This operation is idempotent: deleting an Application that does not exist also succeeds.
+    ///     The Application is removed together with its API Keys and Log Events, which can take a while for many Log Events.
+    ///     This operation is idempotent: deleting an Application that does not exist also succeeds, and repeating an
+    ///     interrupted request finishes deleting its Log Events.
     /// </remarks>
     /// <param name="id" example="0199d1a2-7c3e-7b4a-9f10-5c963f66afa6">Id of the Application.</param>
     /// <param name="cancellationToken">CancellationToken to cancel the request.</param>

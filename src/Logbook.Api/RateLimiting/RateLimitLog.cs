@@ -9,7 +9,9 @@ namespace Logbook.Api.RateLimiting;
 /// </summary>
 internal static partial class RateLimitLog
 {
-    // Debug, because it happens on every rejected request, exactly when a sender is already too busy.
-    [LoggerMessage(EventId = 2201, Level = LogLevel.Debug, Message = "A request of API Key {ApiKeyId} was rejected by the rate limit.")]
-    public static partial void RequestRejected(this ILogger logger, string? apiKeyId);
+    [LoggerMessage(EventId = 2201, Level = LogLevel.Warning, Message = "API Key {ApiKeyId} is over its rate limit, so its requests are rejected. Reported at most once per minute.")]
+    public static partial void ApiKeyOverLimit(this ILogger logger, string apiKeyId);
+
+    [LoggerMessage(EventId = 2202, Level = LogLevel.Warning, Message = "IP address {IpAddress} tried too many API Keys that are not valid, so its requests with an API Key are rejected. Reported at most once per minute.")]
+    public static partial void TooManyInvalidApiKeys(this ILogger logger, string ipAddress);
 }

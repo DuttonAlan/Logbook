@@ -24,7 +24,7 @@ public sealed class LogbookApiFactory : WebApplicationFactory<Program>, IAsyncLi
     /// </summary>
     public const string AdminKey = "integration-tests-admin-key-0123456789";
 
-    private readonly PostgreSqlContainer _database = new PostgreSqlBuilder("postgres:17-alpine").Build();
+    private readonly PostgreSqlContainer _database = new PostgreSqlBuilder("postgres:18-alpine").Build();
 
     /// <summary>
     ///     Creates a client that sends the admin key with every request.

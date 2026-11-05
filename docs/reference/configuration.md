@@ -16,6 +16,7 @@ Logbook is configured like any ASP.NET Core application: through `appsettings.js
 | `LogIngestion:WriteBatchSize` | `1000` | Maximum number of Log Events written to the database at once. Must be greater than 0. |
 | `LogIngestion:WriteInterval` | `00:00:01` | How long a Log Event waits for others to be written with it, if there are fewer than `WriteBatchSize`. Must be greater than 0. |
 | `RateLimiting:ApiKeyPermitsPerMinute` | `6000` | Requests per minute each API Key can send to the [log API](log-api.md#rate-limit), per server. From 1 to 1,000,000. |
+| `RateLimiting:InvalidApiKeyPermitsPerMinute` | `600` | Requests per minute with an API Key that is not valid, for each IP address, per server. Above it, all requests with an API Key from that address get `429`. From 1 to 1,000,000. |
 | `AllowedHosts` | `*` | Host names the server answers to, separated by `;`. Set it to your domain in production. |
 | `ASPNETCORE_HTTP_PORTS` | `8080` in the container image | Port for plain HTTP, for a TLS-terminating reverse proxy. |
 | `ASPNETCORE_ENVIRONMENT` | `Production` | `Development` enables Swagger UI at `/swagger` and the settings of `appsettings.Development.json`. Never use it outside your computer. |
