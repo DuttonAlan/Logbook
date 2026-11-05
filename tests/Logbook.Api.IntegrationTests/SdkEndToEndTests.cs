@@ -104,6 +104,27 @@ public sealed class SdkEndToEndTests(LogbookApiFactory factory) : IClassFixture<
     }
 
     [Fact]
+    public async Task EventsTheServerStoresLargerThanSent_DoNotCostTheirBatch()
+    {
+        var application = await CreateApplicationAsync();
+        var numbers = "{\"a\":[" + string.Join(',', Enumerable.Repeat("1e999", 35_000)) + "]}";
+        var escapedText = "{\"a\":\"" + new string('\u007F', 85_000) + "\"}";
+
+        using (var client = CreateClient(application, batchSize: 3))
+        {
+            client.Enqueue(new LogbookEvent(DateTimeOffset.UtcNow, LogbookLevel.Information, "numbers", propertiesJson: numbers));
+            client.Enqueue(new LogbookEvent(DateTimeOffset.UtcNow, LogbookLevel.Information, "text", propertiesJson: escapedText));
+            client.Enqueue(new LogbookEvent(DateTimeOffset.UtcNow, LogbookLevel.Information, "neighbor"));
+
+            var items = await WaitForLogEventsAsync(application.Id, 2);
+            var messages = items.Select(item => item.GetProperty("message").GetString()).ToList();
+
+            Assert.Contains("text", messages);
+            Assert.Contains("neighbor", messages);
+        }
+    }
+
+    [Fact]
     public async Task ALoneSurrogateInTheMessage_IsAcceptedByTheServer()
     {
         var application = await CreateApplicationAsync();

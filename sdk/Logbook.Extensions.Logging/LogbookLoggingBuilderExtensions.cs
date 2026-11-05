@@ -67,6 +67,7 @@ public static class LogbookLoggingBuilderExtensions
             client,
             environment,
             options?.MaxMessageLength ?? 0,
+            options?.MaxEventBytes ?? 0,
             services.GetService<TimeProvider>() ?? TimeProvider.System);
     }
 

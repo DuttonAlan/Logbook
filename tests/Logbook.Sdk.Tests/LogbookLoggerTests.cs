@@ -7,6 +7,8 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 
+using Logbook.Extensions.Logging;
+
 using Microsoft.Extensions.Logging;
 
 namespace Logbook.Sdk.Tests;
@@ -223,6 +225,88 @@ public sealed partial class LogbookLoggerTests
         var properties = SendValues(("Nested", nested));
 
         Assert.Equal(JsonValueKind.Array, properties.GetProperty("Nested").ValueKind);
+        Assert.True(properties.GetProperty("logbook.truncated").GetBoolean());
+    }
+
+    [Fact]
+    public void ADictionaryAtTheDepthLimit_IsMarked()
+    {
+        object nested = new Dictionary<string, object?> { ["a"] = 1 };
+
+        for (var level = 0; level < 4; level++)
+        {
+            nested = new[] { nested };
+        }
+
+        var properties = SendValues(("Nested", nested));
+
+        Assert.True(properties.GetProperty("logbook.truncated").GetBoolean());
+    }
+
+    [Fact]
+    public void NestedCollections_ShareOneLimit_SoTheCallStaysCheap()
+    {
+        var leaf = new CountingItems();
+        object[] middle = [.. Enumerable.Repeat<object>(leaf, 100)];
+        object[] outer = [.. Enumerable.Repeat<object>(middle, 100)];
+
+        var properties = SendValues(("Nested", outer));
+
+        Assert.True(leaf.ItemsRead <= EventJsonWriter.MaxValues, $"Read {leaf.ItemsRead} items.");
+        Assert.True(properties.GetProperty("logbook.truncated").GetBoolean());
+    }
+
+    [Fact]
+    public void AStateWithVeryManyValues_IsLimited_AndMarked()
+    {
+        var state = new CountingState();
+
+        var sent = LoggerHarness.SendOne(logger => logger.Log(LogLevel.Information, default, state, null, (_, _) => "Message"));
+
+        Assert.True(state.ValuesRead <= EventValues.MaxTopLevelValues + 1, $"Read {state.ValuesRead} values.");
+        Assert.True(sent.GetProperty("properties").GetProperty("logbook.truncated").GetBoolean());
+    }
+
+    [Fact]
+    public void ScopesWithVeryManyValues_DoNotCostTheValuesOfTheCall()
+    {
+        var sent = LoggerHarness.SendOne(logger =>
+        {
+            using (logger.BeginScope(new CountingState()))
+            {
+                logger.LogInformation("{OrderId}", 42);
+            }
+        });
+
+        Assert.Equal(42, sent.GetProperty("properties").GetProperty("OrderId").GetInt32());
+        Assert.True(sent.GetProperty("properties").GetProperty("logbook.truncated").GetBoolean());
+    }
+
+    [Fact]
+    public void AnEndlessEnumerableOfTheSamePair_DoesNotHang()
+    {
+        var properties = SendValues(("Pairs", Endless()));
+
+        Assert.Equal(1, properties.GetProperty("Pairs").GetProperty("same").GetInt32());
+        Assert.True(properties.GetProperty("logbook.truncated").GetBoolean());
+
+        static IEnumerable<KeyValuePair<string, object?>> Endless()
+        {
+            while (true)
+            {
+                yield return new KeyValuePair<string, object?>("same", 1);
+            }
+        }
+    }
+
+    [Fact]
+    public void TextInValues_SharesOneLimit_ThatLeavesTheEventToBeCutEvenly()
+    {
+        var properties = SendValues(("Items", Enumerable.Repeat(new string('x', 65_536), 100)));
+
+        // Two times the default of 256 KiB, in texts of the longest length.
+        Assert.Equal(8, properties.GetProperty("Items").GetArrayLength());
+        Assert.True(properties.GetProperty("logbook.truncated").GetBoolean());
     }
 
     [Fact]
@@ -575,6 +659,36 @@ public sealed partial class LogbookLoggerTests
 
     // A state with the plain name, because the message formatter would enumerate these collections itself.
     private static JsonElement SendStateValue(string name, IEnumerable value) => SendValues((name, value));
+
+    private sealed class CountingItems : IEnumerable
+    {
+        public int ItemsRead { get; private set; }
+
+        public IEnumerator GetEnumerator()
+        {
+            for (var index = 0; index < 100; index++)
+            {
+                ItemsRead++;
+                yield return index;
+            }
+        }
+    }
+
+    private sealed class CountingState : IEnumerable<KeyValuePair<string, object?>>
+    {
+        public int ValuesRead { get; private set; }
+
+        public IEnumerator<KeyValuePair<string, object?>> GetEnumerator()
+        {
+            for (var index = 0; index < 1_000_000; index++)
+            {
+                ValuesRead++;
+                yield return new KeyValuePair<string, object?>($"value{index}", index);
+            }
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    }
 
     private sealed class FormattableValue : IFormattable
     {

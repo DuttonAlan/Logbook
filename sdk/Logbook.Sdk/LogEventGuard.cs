@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 // See the LICENSE file in the project root for license information.
 
+using System.Buffers;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -31,6 +32,13 @@ internal static class LogEventGuard
     // The most bytes one UTF-16 code unit can take in UTF-8. This includes U+0000, which the server turns into U+FFFD.
     private const int MaxBytesPerCharacter = 3;
 
+    // The most bytes one UTF-16 code unit in JSON can take as the server stores it, e.g. U+007F becomes \u007F. A number
+    // grows by less: at least 5 characters, plus 2 for the quotes.
+    private const int MaxStoredJsonBytesPerCharacter = 6;
+
+    // Longer numbers are stored as strings by the server.
+    private const int MaxStoredNumberLength = 64;
+
     // Below this, the text of an event is no longer of any use, so it is better to drop it and report that.
     private const int SmallestTextLimit = 64;
 
@@ -49,7 +57,7 @@ internal static class LogEventGuard
     };
 
     // The clocks of the application and the server may differ, and the request takes time. An event close to a limit is
-    // not worth risking its whole batch.
+    // not worth risking its whole batch. A short window uses half of itself instead, as it must still admit current events.
     private static readonly TimeSpan ClockMargin = TimeSpan.FromMinutes(5);
 
     private static readonly JsonDocumentOptions DocumentOptions = new() { MaxDepth = MaxObjectDepth };
@@ -88,7 +96,8 @@ internal static class LogEventGuard
     {
         guarded = null;
 
-        if (logEvent.Timestamp < now - limits.MaxEventAge + ClockMargin || logEvent.Timestamp > now + limits.MaxFutureOffset - ClockMargin)
+        if (logEvent.Timestamp < now - limits.MaxEventAge + MarginWithin(limits.MaxEventAge)
+            || logEvent.Timestamp > now + limits.MaxFutureOffset - MarginWithin(limits.MaxFutureOffset))
         {
             return LogEventGuardResult.Expired;
         }
@@ -136,26 +145,107 @@ internal static class LogEventGuard
         return LogEventGuardResult.Truncated;
     }
 
+    private static TimeSpan MarginWithin(TimeSpan window)
+    {
+        var half = TimeSpan.FromTicks(window.Ticks / 2);
+
+        return half < ClockMargin ? half : ClockMargin;
+    }
+
     private static bool IsSurelyWithinLimits(string message, string? template, string? exception, string? properties, LogEventLimits limits)
     {
         var templateLength = template?.Length ?? 0;
-        var characters = (long)message.Length + templateLength + (exception?.Length ?? 0) + (properties?.Length ?? 0);
+        var textBytes = ((long)message.Length + templateLength) * MaxBytesPerCharacter;
+        var jsonBytes = ((long)(exception?.Length ?? 0) + (properties?.Length ?? 0)) * MaxStoredJsonBytesPerCharacter;
 
         return message.Length <= limits.MaxMessageLength
             && templateLength <= limits.MaxMessageLength
-            && characters * MaxBytesPerCharacter <= limits.MaxEventBytes;
+            && textBytes + jsonBytes <= limits.MaxEventBytes;
     }
 
     private static bool IsTooLarge(string message, string? template, string? exception, string? properties, LogEventLimits limits)
     {
         var bytes = (long)Encoding.UTF8.GetByteCount(message)
             + Encoding.UTF8.GetByteCount(template ?? string.Empty)
-            + Encoding.UTF8.GetByteCount(exception ?? string.Empty)
-            + Encoding.UTF8.GetByteCount(properties ?? string.Empty);
+            + GetStoredBytes(exception)
+            + GetStoredBytes(properties);
 
         return bytes > limits.MaxEventBytes
             || message.Length > limits.MaxMessageLength
             || (template?.Length ?? 0) > limits.MaxMessageLength;
+    }
+
+    // The server counts JSON after rewriting it for storage, which can make it larger. So this writes it the same way, with
+    // the same encoder and rules. SdkEndToEndTests checks that the two stay the same.
+    private static long GetStoredBytes(string? json)
+    {
+        if (json is null)
+        {
+            return 0;
+        }
+
+        using var document = JsonDocument.Parse(json, DocumentOptions);
+        var buffer = new ArrayBufferWriter<byte>();
+
+        using (var writer = new Utf8JsonWriter(buffer, WriterOptions))
+        {
+            WriteStoredValue(writer, document.RootElement);
+        }
+
+        return buffer.WrittenCount;
+    }
+
+    private static void WriteStoredValue(Utf8JsonWriter writer, JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                writer.WriteStartObject();
+
+                foreach (var property in element.EnumerateObject())
+                {
+                    writer.WritePropertyName(property.Name.Replace('\0', '\uFFFD'));
+                    WriteStoredValue(writer, property.Value);
+                }
+
+                writer.WriteEndObject();
+                break;
+
+            case JsonValueKind.Array:
+                writer.WriteStartArray();
+
+                foreach (var item in element.EnumerateArray())
+                {
+                    WriteStoredValue(writer, item);
+                }
+
+                writer.WriteEndArray();
+                break;
+
+            case JsonValueKind.String:
+                writer.WriteStringValue(element.GetString()!.Replace('\0', '\uFFFD'));
+                break;
+
+            case JsonValueKind.Number when !IsStoredAsNumber(element):
+                writer.WriteStringValue(element.GetRawText());
+                break;
+
+            default:
+                element.WriteTo(writer);
+                break;
+        }
+    }
+
+    private static bool IsStoredAsNumber(JsonElement number)
+    {
+        var text = number.GetRawText();
+
+        if (text.Length > MaxStoredNumberLength || !number.TryGetDouble(out var value) || !double.IsFinite(value))
+        {
+            return false;
+        }
+
+        return value != 0 || !text.TakeWhile(character => character is not ('e' or 'E')).Any(character => character is >= '1' and <= '9');
     }
 
     // Applies one limit to all long text of the event, lowered until the event fits. So a single long text is cut only as

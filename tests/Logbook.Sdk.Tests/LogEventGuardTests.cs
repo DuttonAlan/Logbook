@@ -56,6 +56,51 @@ public sealed class LogEventGuardTests
     }
 
     [Fact]
+    public void Check_NoAllowedFuture_StillAdmitsACurrentEvent()
+    {
+        var limits = new LogEventLimits(new LogbookOptions { MaxFutureOffset = TimeSpan.Zero });
+
+        Assert.Equal(LogEventGuardResult.Accepted, LogEventGuard.Check(new LogbookEvent(Now, LogbookLevel.Information, "x"), limits, Now, out _));
+        Assert.Equal(LogEventGuardResult.Expired, LogEventGuard.Check(new LogbookEvent(Now.AddSeconds(1), LogbookLevel.Information, "x"), limits, Now, out _));
+    }
+
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(-29, true)]
+    [InlineData(-31, false)]
+    public void Check_AWindowShorterThanTheMargin_UsesHalfOfItAsTheMargin(int secondsFromNow, bool accepted)
+    {
+        var limits = new LogEventLimits(new LogbookOptions { MaxEventAge = TimeSpan.FromMinutes(1) });
+        var logEvent = new LogbookEvent(Now.AddSeconds(secondsFromNow), LogbookLevel.Information, "x");
+
+        Assert.Equal(accepted ? LogEventGuardResult.Accepted : LogEventGuardResult.Expired, LogEventGuard.Check(logEvent, limits, Now, out _));
+    }
+
+    [Fact]
+    public void Check_NumbersTheServerStoresAsStrings_AreCountedWithTheirQuotes()
+    {
+        // About 210 KB as sent, and about 280 KB as the server stores it, which is over its limit of 256 KiB.
+        var properties = "{\"a\":[" + string.Join(',', Enumerable.Repeat("1e999", 35_000)) + "]}";
+        var logEvent = new LogbookEvent(Now, LogbookLevel.Information, "x", propertiesJson: properties);
+
+        Assert.True(properties.Length < MaxEventBytes);
+        Assert.Equal(LogEventGuardResult.TooLarge, LogEventGuard.Check(logEvent, Limits, Now, out _));
+    }
+
+    [Fact]
+    public void Check_TextTheServerStoresEscaped_IsCountedEscaped()
+    {
+        // U+007F takes 1 byte as sent, and 6 bytes as the server stores it.
+        var properties = "{\"a\":\"" + new string('\u007F', 85_000) + "\"}";
+        var logEvent = new LogbookEvent(Now, LogbookLevel.Information, "x", propertiesJson: properties);
+
+        Assert.Equal(LogEventGuardResult.Truncated, LogEventGuard.Check(logEvent, Limits, Now, out var guarded));
+
+        using var stored = JsonDocument.Parse(guarded!.PropertiesJson!);
+        Assert.True(stored.RootElement.GetProperty("a").GetString()!.Length * 6 <= MaxEventBytes);
+    }
+
+    [Fact]
     public void Check_AMessageAtTheLimit_IsNotCut()
     {
         var logEvent = new LogbookEvent(Now, LogbookLevel.Information, new string('x', MaxMessageLength));

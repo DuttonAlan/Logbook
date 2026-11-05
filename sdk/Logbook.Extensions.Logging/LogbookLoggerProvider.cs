@@ -17,12 +17,14 @@ namespace Logbook.Extensions.Logging;
 /// <param name="client">The client to send with.</param>
 /// <param name="environment">The Environment of the events.</param>
 /// <param name="maxTextLength">Maximum length of text in the structured values of an event.</param>
+/// <param name="maxEventBytes">Maximum size of the content of an event.</param>
 /// <param name="timeProvider">The clock for the timestamps.</param>
 [ProviderAlias(ProviderName)]
 internal sealed class LogbookLoggerProvider(
     LogbookClient client,
     string? environment,
     int maxTextLength,
+    int maxEventBytes,
     TimeProvider timeProvider) : ILoggerProvider, ISupportExternalScope
 {
     /// <summary>
@@ -57,6 +59,11 @@ internal sealed class LogbookLoggerProvider(
     ///     Maximum length of text in the structured values of an event.
     /// </summary>
     public int MaxTextLength { get; } = maxTextLength;
+
+    /// <summary>
+    ///     Maximum size of the content of an event.
+    /// </summary>
+    public int MaxEventBytes { get; } = maxEventBytes;
 
     /// <summary>
     ///     The clock for the timestamps.

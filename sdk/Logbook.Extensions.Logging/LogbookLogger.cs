@@ -100,7 +100,7 @@ internal sealed class LogbookLogger(LogbookLoggerProvider provider, string categ
             values.AddIfMissing(EventValues.EventNameProperty, eventId.Name);
         }
 
-        var json = new EventJsonWriter(provider.MaxTextLength);
+        var json = new EventJsonWriter(provider.MaxTextLength, provider.MaxEventBytes);
         var exceptionJson = exception is null ? null : json.WriteException(exception);
         var propertiesJson = json.WriteProperties(values);
 

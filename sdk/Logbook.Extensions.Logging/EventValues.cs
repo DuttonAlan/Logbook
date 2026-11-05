@@ -20,15 +20,26 @@ internal sealed class EventValues
     /// </summary>
     public const string ScopesProperty = "Scopes";
 
+    /// <summary>
+    ///     Maximum number of values read from the state of a call, and from all scopes together.
+    /// </summary>
+    public const int MaxTopLevelValues = 1000;
+
     // The name Microsoft.Extensions.Logging gives to the message template among the values of a call.
     private const string OriginalFormat = "{OriginalFormat}";
 
     private List<string>? _scopeTexts;
+    private int _remainingScopeValues = MaxTopLevelValues;
 
     /// <summary>
     ///     The message before rendering, if the state has one.
     /// </summary>
     public string? MessageTemplate { get; private set; }
+
+    /// <summary>
+    ///     Whether a limit was reached, so that values are missing.
+    /// </summary>
+    public bool IsTruncated { get; private set; }
 
     /// <summary>
     ///     The values by name, in the order they were first added.
@@ -41,12 +52,24 @@ internal sealed class EventValues
     /// <param name="scope">The object passed to <c>BeginScope</c>.</param>
     public void AddScope(object? scope)
     {
+        if (_remainingScopeValues <= 0)
+        {
+            IsTruncated = true;
+            return;
+        }
+
         try
         {
             if (scope is IEnumerable<KeyValuePair<string, object?>> pairs)
             {
                 foreach (var pair in pairs)
                 {
+                    if (_remainingScopeValues-- <= 0)
+                    {
+                        IsTruncated = true;
+                        break;
+                    }
+
                     if (pair.Key == OriginalFormat)
                     {
                         AddScopeText(scope.ToString());
@@ -59,6 +82,7 @@ internal sealed class EventValues
             }
             else if (scope is not null)
             {
+                _remainingScopeValues--;
                 AddScopeText(scope.ToString());
             }
         }
@@ -81,8 +105,17 @@ internal sealed class EventValues
         {
             if (state is IEnumerable<KeyValuePair<string, object?>> pairs)
             {
+                var read = 0;
+
                 foreach (var pair in pairs)
                 {
+                    // The scopes have their own limit, so that they cannot cost the values of the call.
+                    if (read++ == MaxTopLevelValues)
+                    {
+                        IsTruncated = true;
+                        break;
+                    }
+
                     if (pair.Key == OriginalFormat)
                     {
                         MessageTemplate = pair.Value as string;

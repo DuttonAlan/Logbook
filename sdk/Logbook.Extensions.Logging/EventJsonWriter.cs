@@ -16,13 +16,20 @@ namespace Logbook.Extensions.Logging;
 /// <remarks>
 ///     Other objects are written with their <c>ToString</c> and never through reflection: that would run any getter of the
 ///     application, could follow cycles, and could send secrets nobody meant to log. All limits keep one call from costing
-///     the application much, and the event from becoming too large. If one is reached, the event is marked as truncated.
+///     the application much, and the event from becoming too large. The limits on values and text apply to the whole event,
+///     as limits per collection would multiply with each level. If one is reached, the event is marked as truncated.
 /// </remarks>
 /// <param name="maxTextLength">Maximum length of text in a value.</param>
-internal sealed class EventJsonWriter(int maxTextLength)
+/// <param name="maxEventBytes">Maximum size of the content of an event, which limits the text of all values together.</param>
+internal sealed class EventJsonWriter(int maxTextLength, int maxEventBytes)
 {
     // The mark the SDK sets on an event whose text was cut. It is read by nobody but people.
     private const string TruncatedProperty = "logbook.truncated";
+
+    /// <summary>
+    ///     Maximum number of items read from all collections of one event together.
+    /// </summary>
+    public const int MaxValues = 10_000;
 
     private const int MaxValueDepth = 5;
     private const int MaxCollectionItems = 100;
@@ -37,6 +44,8 @@ internal sealed class EventJsonWriter(int maxTextLength)
     };
 
     private bool _isTruncated;
+    private int _remainingValues = MaxValues;
+    private long _remainingText;
 
     /// <summary>
     ///     Writes an exception with its inner exceptions.
@@ -57,17 +66,19 @@ internal sealed class EventJsonWriter(int maxTextLength)
     /// <returns>The JSON object, or null if there is nothing to write.</returns>
     public string? WriteProperties(EventValues values)
     {
+        _isTruncated |= values.IsTruncated;
+
+        // More than fits in an event, so that the client can still cut long text evenly and keep the short text. The text of
+        // the exception does not count, as it has its own limits.
+        _remainingText = 2L * maxEventBytes;
+
         return values.Values.Count == 0 && !_isTruncated
             ? null
             : WriteJson(writer =>
             {
                 writer.WriteStartObject();
 
-                foreach (var pair in values.Values)
-                {
-                    writer.WritePropertyName(pair.Key);
-                    WriteValue(writer, pair.Value, 1);
-                }
+                WriteMembers(writer, values.Values, 1);
 
                 if (_isTruncated)
                 {
@@ -211,11 +222,13 @@ internal sealed class EventJsonWriter(int maxTextLength)
         }
         else if (text.Length <= maxTextLength)
         {
+            _remainingText -= text.Length;
             writer.WriteStringValue(text);
         }
         else
         {
             _isTruncated = true;
+            _remainingText -= maxTextLength;
 
             // Half of a surrogate pair is not valid text.
             var length = char.IsHighSurrogate(text[maxTextLength - 1]) ? maxTextLength - 1 : maxTextLength;
@@ -278,6 +291,11 @@ internal sealed class EventJsonWriter(int maxTextLength)
             case IEnumerable items when depth < MaxValueDepth:
                 WriteItems(writer, items, depth);
                 break;
+            case IEnumerable:
+                // Too deep to read, so its text is all that remains of it.
+                _isTruncated = true;
+                WriteText(writer, ToText(value));
+                break;
             default:
                 WriteText(writer, ToText(value));
                 break;
@@ -287,19 +305,18 @@ internal sealed class EventJsonWriter(int maxTextLength)
     // Reads everything first: an enumerator of the application can throw, which must not leave the JSON half written.
     private void WriteDictionary(Utf8JsonWriter writer, IDictionary dictionary, int depth)
     {
-        var pairs = new List<KeyValuePair<string, object?>>();
+        var read = new Dictionary<string, object?>(StringComparer.Ordinal);
 
         try
         {
             foreach (DictionaryEntry entry in dictionary)
             {
-                if (pairs.Count == MaxCollectionItems)
+                if (!CanReadAnother(read.Count))
                 {
-                    _isTruncated = true;
                     break;
                 }
 
-                pairs.Add(new KeyValuePair<string, object?>(ToText(entry.Key) ?? string.Empty, entry.Value));
+                read[ToText(entry.Key) ?? string.Empty] = entry.Value;
             }
         }
 #pragma warning disable CA1031 // The values come from the application, and the SDK must never throw into it.
@@ -309,7 +326,9 @@ internal sealed class EventJsonWriter(int maxTextLength)
             _isTruncated = true;
         }
 
-        WritePairs(writer, pairs, depth);
+        writer.WriteStartObject();
+        WriteMembers(writer, read, depth + 1);
+        writer.WriteEndObject();
     }
 
     private void WritePairs(Utf8JsonWriter writer, IEnumerable<KeyValuePair<string, object?>> pairs, int depth)
@@ -320,9 +339,8 @@ internal sealed class EventJsonWriter(int maxTextLength)
         {
             foreach (var pair in pairs)
             {
-                if (read.Count == MaxCollectionItems)
+                if (!CanReadAnother(read.Count))
                 {
-                    _isTruncated = true;
                     break;
                 }
 
@@ -337,14 +355,23 @@ internal sealed class EventJsonWriter(int maxTextLength)
         }
 
         writer.WriteStartObject();
-
-        foreach (var pair in read)
-        {
-            writer.WritePropertyName(pair.Key);
-            WriteValue(writer, pair.Value, depth + 1);
-        }
-
+        WriteMembers(writer, read, depth + 1);
         writer.WriteEndObject();
+    }
+
+    private void WriteMembers(Utf8JsonWriter writer, Dictionary<string, object?> members, int depth)
+    {
+        foreach (var pair in members)
+        {
+            if (IsOutOfText())
+            {
+                break;
+            }
+
+            _remainingText -= pair.Key.Length;
+            writer.WritePropertyName(pair.Key);
+            WriteValue(writer, pair.Value, depth);
+        }
     }
 
     private void WriteItems(Utf8JsonWriter writer, IEnumerable items, int depth)
@@ -355,9 +382,8 @@ internal sealed class EventJsonWriter(int maxTextLength)
         {
             foreach (var item in items)
             {
-                if (read.Count == MaxCollectionItems)
+                if (!CanReadAnother(read.Count))
                 {
-                    _isTruncated = true;
                     break;
                 }
 
@@ -375,10 +401,39 @@ internal sealed class EventJsonWriter(int maxTextLength)
 
         foreach (var item in read)
         {
+            if (IsOutOfText())
+            {
+                break;
+            }
+
             WriteValue(writer, item, depth + 1);
         }
 
         writer.WriteEndArray();
+    }
+
+    // Counts each read rather than the items kept, as an enumerable can return the same key forever.
+    private bool CanReadAnother(int readFromThisCollection)
+    {
+        if (readFromThisCollection == MaxCollectionItems || _remainingValues <= 0)
+        {
+            _isTruncated = true;
+            return false;
+        }
+
+        _remainingValues--;
+        return true;
+    }
+
+    private bool IsOutOfText()
+    {
+        if (_remainingText > 0)
+        {
+            return false;
+        }
+
+        _isTruncated = true;
+        return true;
     }
 
     private delegate void WriteDelegate(Utf8JsonWriter writer);

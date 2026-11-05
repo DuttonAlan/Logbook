@@ -24,7 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - SDK size guards: events over a limit of the server have their long text cut and get the property `logbook.truncated`, and are dropped only if still too large. Events outside of the accepted time window are dropped. New options `MaxEventBytes`, `MaxMessageLength`, `MaxEventAge`, `MaxFutureOffset` and `RequestTimeout`.
 - SDK shutdown: disposing the client sends what is left, for at most the new option `ShutdownTimeout`.
 - SDK diagnostics through an `EventSource` named `Logbook-Sdk`.
-- `ILogger` provider: `builder.Logging.AddLogbook(…)` in `Logbook.Extensions.Logging` reads the section `Logbook` and sends message templates, scopes, `EventId`, inner and aggregate exceptions, and `traceId` and `spanId` from `Activity.Current`. The Environment comes from `IHostEnvironment`, unless the new option `Environment` overrides it. Its own categories and `System.Net.Http.HttpClient` are excluded, so sending cannot create more to send. See [SDK behavior](docs/reference/sdk-behavior.md).
+- `ILogger` provider: `builder.Logging.AddLogbook(…)` in `Logbook.Extensions.Logging` reads the section `Logbook` and sends message templates, scopes, `EventId`, inner and aggregate exceptions, and `traceId` and `spanId` from `Activity.Current`. The values of one event are limited as a whole, so that a call to the logger stays cheap. The Environment comes from `IHostEnvironment`, unless the new option `Environment` overrides it. Its own categories and `System.Net.Http.HttpClient` are excluded, so sending cannot create more to send. See [SDK behavior](docs/reference/sdk-behavior.md).
 - How-to guide: [connect an application](docs/how-to/connect-application.md).
 
 ### Changed

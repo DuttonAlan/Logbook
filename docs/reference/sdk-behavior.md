@@ -32,7 +32,7 @@ Logs of the categories `Logbook.Sdk`, `Logbook.Extensions.Logging`, `Logbook.Asp
 
 For values of the same name, the call wins over the innermost scope, and that one over the outer scopes. `Scopes` and `EventName` never replace a value of the application.
 
-Values are captured during the call, so later changes to an object are not sent. Text, numbers, booleans, `null`, `DateTime`, `DateTimeOffset` and `Guid` keep their JSON type. Dictionaries become objects and other collections become arrays, up to 100 items and 5 levels deep. Everything else, including enums, is sent as text using `ToString`, formatted with the invariant culture. Objects are never read through reflection, because that would run their getters and could send secrets nobody meant to log.
+Values are captured during the call, so later changes to an object are not sent. Text, numbers, booleans, `null`, `DateTime`, `DateTimeOffset` and `Guid` keep their JSON type. Dictionaries become objects and other collections become arrays, up to 100 items and 5 levels deep, and a collection deeper than that is sent as text. One event reads at most 1000 values from the call, 1000 from all scopes together, and 10,000 items from all collections together. Its values hold at most two times `MaxEventBytes` of text, and those after that are left out. This keeps a call to the logger cheap, as it runs on the thread of your application. Everything else, including enums, is sent as text using `ToString`, formatted with the invariant culture. Objects are never read through reflection, because that would run their getters and could send secrets nobody meant to log.
 
 ### Exceptions
 
@@ -73,10 +73,10 @@ The server rejects a whole batch for a single event it does not accept, so the c
 |---|---|
 | `message` or `messageTemplate` over `MaxMessageLength` | Cut, and marked as truncated. |
 | `category` over 500 characters, `environment` over 100, `traceId` or `spanId` over 64 | Cut, and marked as truncated. |
-| Event over `MaxEventBytes` | All long text is cut to one limit, including strings inside `exception` and `properties`, and the event is marked as truncated. The limit is lowered until the event fits, so short text stays whole. |
+| Event over `MaxEventBytes`, counting `exception` and `properties` as the server stores them | All long text is cut to one limit, including strings inside `exception` and `properties`, and the event is marked as truncated. The limit is lowered until the event fits, so short text stays whole. |
 | Event still over `MaxEventBytes`, e.g. because of many small properties | Dropped. |
 | JSON of the event over `MaxRequestBytes` | Dropped. |
-| Timestamp older than `MaxEventAge` or further ahead than `MaxFutureOffset`, with a margin of 5 minutes for clocks that differ | Dropped. |
+| Timestamp older than `MaxEventAge` or further ahead than `MaxFutureOffset`, with a margin for clocks that differ of 5 minutes, or half of the setting if that is less | Dropped. With `MaxFutureOffset` at 0, there is no margin, so an application whose clock is ahead of the server can lose batches. |
 | `exception` or `properties` that is not a JSON object, is nested more than 29 levels deep, or contains invalid text | The value is left out, and the event is sent without it. |
 
 An event marked as truncated has the property `logbook.truncated` set to `true`.
