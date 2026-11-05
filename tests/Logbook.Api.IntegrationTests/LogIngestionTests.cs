@@ -317,6 +317,23 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
         await AssertRejectedBatchWasNotStoredAsync();
     }
 
+    [Theory]
+    [InlineData("properties", false)]
+    [InlineData("properties", true)]
+    [InlineData("exception", false)]
+    [InlineData("exception", true)]
+    public async Task Post_WithJsonNestedDeeperThanTheLimit_IsBadRequest(string field, bool arrays)
+    {
+        const int Levels = LogEvent.MaxJsonDepth + 1;
+
+        var value = arrays ? LogEventBodies.NestedArrays(Levels) : LogEventBodies.NestedObjects(Levels);
+
+        using var response = await PostAsync(LogEventBodies.Valid($""" "{field}": {value} """));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await AssertRejectedBatchWasNotStoredAsync();
+    }
+
     [Fact]
     public async Task Post_WithMessageLongerThanTheLimit_IsBadRequest()
     {

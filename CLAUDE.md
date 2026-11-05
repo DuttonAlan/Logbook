@@ -53,7 +53,7 @@ Server: three projects with a strict dependency direction: `Logbook.Api` → `Lo
 
 Web interface: `src/Logbook.Web`, React + TypeScript with Vite. Not part of the .NET solution. The Dockerfile builds it and copies `dist/` into the Api's `wwwroot`.
 
-SDK: `sdk/` holds the NuGet packages; shared package settings are in `sdk/Directory.Build.props`. `Logbook.Sdk` (netstandard2.0 + net10.0) is the client: bounded in-memory buffer, background batching, retries. `Logbook.Extensions.Logging` is the `ILogger` provider, `Logbook.AspNetCore` adds request and dependency tracking. The SDK never references the server projects. It must never throw into or block the host application.
+SDK: `sdk/` holds the NuGet packages; shared package settings are in `sdk/Directory.Build.props`. `Logbook.Sdk` (net10.0, like all SDK packages) is the client: bounded in-memory buffer, background batching, retries. `Logbook.Extensions.Logging` is the `ILogger` provider, `Logbook.AspNetCore` adds request and dependency tracking. The SDK never references the server projects. It must never throw into or block the host application.
 
 ### Errors
 
@@ -72,6 +72,7 @@ Services throw `NotFoundException` (404), `ConflictException` (409), `DomainVali
 
 - `tests/Logbook.Api.IntegrationTests`: `LogbookApiFactory` (`WebApplicationFactory<Program>`) starts a PostgreSQL container, migrates it and runs in environment `Testing`. `MigrationTests` checks for model changes without a migration and needs no database.
 - `tests/Logbook.Sdk.Tests`: unit tests of the SDK without a server.
+- `SdkEndToEndTests` in the integration tests sends through the real SDK to the real server, so the format of the requests cannot drift apart unnoticed.
 - Test-wide build settings live in `tests/Directory.Build.props`.
 
 ## Docs
@@ -80,7 +81,7 @@ The documentation follows Diátaxis (`docs/README.md` is the index). Keep it in 
 
 - `docs/tutorials/` – learning by doing (Docker Compose quickstart).
 - `docs/how-to/` – task guides (run from source; later: production deployment, reverse proxy, connect an application).
-- `docs/reference/` – exact facts: `configuration.md` (every setting, default and limit), `log-api.md`, `admin-api.md`, `health-checks.md`.
+- `docs/reference/` – exact facts: `configuration.md` (every setting, default and limit), `log-api.md`, `admin-api.md`, `health-checks.md`, `sdk-behavior.md`.
 - `docs/explanation/` – design and reasoning: architecture.
 - `docs/roadmap.md` – the milestones M0–M8 with their features. Tick off items as they are built.
 - Website: VitePress builds `docs/` (`.github/workflows/docs.yml`, GitHub Pages). `docs/index.md` is the homepage, `docs/README.md` becomes `/overview`, the sidebar is in `docs/.vitepress/config.mts`, so a new page must be added there. Links that leave `docs/` are rewritten to GitHub at build time. Check with `npm ci && npm run build` in `docs/` (fails on dead links).

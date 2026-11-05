@@ -21,12 +21,14 @@ Start here if you are new to Logbook.
 
 - [Run Logbook from source](how-to/run-from-source.md)
 - [Manage Applications and API Keys](how-to/manage-applications.md)
+- [Connect an application](how-to/connect-application.md)
 
 ## Reference
 
 - [Configuration](reference/configuration.md): every setting, its default and its limits
 - [Admin API](reference/admin-api.md): manage Applications and API Keys
 - [Log API](reference/log-api.md): send and search Log Events
+- [SDK behavior](reference/sdk-behavior.md): retries, limits, shutdown and diagnostics of the SDK
 - [Health checks](reference/health-checks.md)
 
 ## Explanation

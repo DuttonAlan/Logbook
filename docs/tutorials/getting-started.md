@@ -137,6 +137,7 @@ The database stays in the volume `db-data`. To remove it as well, run `docker co
 
 ## Next steps
 
+- [Connect an application](../how-to/connect-application.md) to send the logs of a .NET application.
 - [Log API](../reference/log-api.md) lists everything you can send and search for.
 - [Manage Applications and API Keys](../how-to/manage-applications.md) to rotate an API Key or remove an Application.
 - [Run Logbook from source](../how-to/run-from-source.md) to develop it.

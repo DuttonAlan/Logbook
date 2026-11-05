@@ -25,12 +25,12 @@ features:
   - icon: 📥
     title: Log API
     details: Batched, compressed ingestion of structured log events, authenticated per Application with API Keys.
-    link: /roadmap#m1-log-api
+    link: /roadmap#m1-log-api-✅
     linkText: Milestone M1
   - icon: 🧩
     title: C# SDK
     details: An ILogger provider that buffers and sends in the background, and never blocks or crashes your application.
-    link: /roadmap#m2-c-sdk
+    link: /roadmap#m2-c-sdk-✅
     linkText: Milestone M2
   - icon: 🔎
     title: Web interface

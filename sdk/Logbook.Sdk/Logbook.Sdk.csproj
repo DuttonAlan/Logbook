@@ -1,17 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
     <Description>Core client of Logbook: buffers, batches and sends log events to a Logbook server.</Description>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-    <PackageReference Include="System.Text.Json" Version="10.0.14" />
-    <PackageReference Include="System.Threading.Channels" Version="10.0.14" />
-  </ItemGroup>
-
   <ItemGroup>
     <InternalsVisibleTo Include="Logbook.Sdk.Tests" />
+    <InternalsVisibleTo Include="Logbook.Api.IntegrationTests" />
   </ItemGroup>
 
 </Project>

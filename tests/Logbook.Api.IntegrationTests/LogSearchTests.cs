@@ -406,6 +406,18 @@ public sealed class LogSearchTests(LogbookApiFactory factory) : IClassFixture<Lo
         Assert.Contains("to_tsvector('simple', l.\"Message\")", sql, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Search_ReturnsJsonAtTheDepthLimit()
+    {
+        var members = $""" "properties": {LogEventBodies.NestedObjects(LogEvent.MaxJsonDepth)}, "exception": {LogEventBodies.NestedArrays(LogEvent.MaxJsonDepth)} """;
+
+        await SendAsync(_sender, LogEventBodies.Valid(members));
+
+        var result = await WaitForAsync(1);
+
+        Assert.Equal(JsonValueKind.Object, Assert.Single(result.Items).Properties!.Value.ValueKind);
+    }
+
     private static string Events(params (string Message, DateTimeOffset Timestamp)[] events)
     {
         return JsonSerializer.Serialize(events.Select(e => new { timestamp = e.Timestamp, level = "Error", message = e.Message }));

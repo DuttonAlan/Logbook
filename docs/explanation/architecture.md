@@ -76,15 +76,23 @@ During development the Vite server runs on its own port and forwards API calls t
 
 ## The SDK
 
-The SDK packages live in `sdk/` and are published to NuGet:
+The SDK packages live in `sdk/` and will be published to NuGet with version 1.0:
 
 | Package | Purpose |
 |---|---|
-| `Logbook.Sdk` | The client: a bounded in-memory buffer, background batching and sending, retries. Targets `netstandard2.0` and `net10.0`, so older applications can use it too. |
+| `Logbook.Sdk` | The client: a bounded in-memory buffer, background batching and sending, retries. Targets `net10.0`, so applications need .NET 10 or later. |
 | `Logbook.Extensions.Logging` | The `ILogger` provider. Existing code that logs through `ILogger` sends to Logbook without changes. |
 | `Logbook.AspNetCore` | Request, dependency and exception tracking for ASP.NET Core applications. |
 
 The most important rule of the SDK is that it never hurts the application it runs in. A call to `ILogger` only puts the event into the buffer and returns. Sending happens in the background; if Logbook is slow or unreachable, the SDK retries and, when the buffer is full, drops the oldest events instead of using more memory or blocking.
+
+A batch stays in the buffer until the server has accepted it, so it counts towards the limits while it is being sent and is the first to be dropped. This is why the buffer is a queue behind a short lock and not a `Channel<T>`, from which an event is gone once it is read. The buffer is limited by memory as well as by number of events, because 10,000 events of 256 KiB would otherwise take gigabytes from the application. A batch is sent when it is full or when its oldest event has waited for the flush interval, compressed with gzip.
+
+The server rejects a whole batch for a single event it does not accept, so the client enforces the same limits before sending. Dropping a large event would lose exactly the logs that tend to matter, such as a huge stack trace, so its long text is cut first and it is marked as truncated. Since a wrong API Key is usually fixed by someone within a while, it is treated like an outage with a long backoff rather than a reason to throw events away. The details are in [SDK behavior](../reference/sdk-behavior.md).
+
+The `ILogger` provider writes the structured values of a call to JSON right away, on the thread of the application, because they could change while the event waits in the buffer. Objects other than plain values and collections are sent as text instead of being serialized: reflection would run their getters, could follow cycles and could send secrets nobody meant to log.
+
+The SDK reports what it does through an `EventSource`. Logging through `ILogger` would send its own logs to itself, and every attempt to send would create more to send.
 
 The SDK does not reference the server projects. The two only share the format of the requests, which is versioned so that older SDKs keep working with newer servers.
 

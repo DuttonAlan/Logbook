@@ -1,6 +1,6 @@
 # Log API
 
-The log API is what applications send their Log Events to and what you search them with. The [SDK](../explanation/architecture.md#the-sdk) will send for you (milestone M2), and the web interface will search for you (milestone M3); until then, you can call it directly.
+The log API is what applications send their Log Events to and what you search them with. The [SDK](../explanation/architecture.md#the-sdk) sends for you, and the web interface will search for you (milestone M3); until then, you can call it directly.
 
 - **Authentication to send:** the API Key of an Application in the header `X-Logbook-Key`. Without an active API Key the endpoint returns `401`, whatever the body contains. The admin key is not accepted. To get an API Key, see [Manage Applications and API Keys](../how-to/manage-applications.md).
 - **Authentication to search:** the admin key from the setting [`AdminApi:Key`](configuration.md#server), as `Authorization: Bearer …`. An API Key can only send, so one that leaks from an application cannot read any logs.
@@ -40,9 +40,9 @@ The body is a JSON array with at least one Log Event:
 | `category` | no | 500 characters | The category of the logger, usually a class name. |
 | `environment` | no | 100 characters | A label to filter by, e.g. `Production`. If it is missing or empty, `Unknown` is stored. Not a security boundary. |
 | `eventId` | no | 32-bit integer | The numeric Id of the event within its category. |
-| `exception` | no | JSON object | Stored as sent, usually with `type`, `message`, `stackTrace` and `inner`. |
+| `exception` | no | JSON object, 29 levels | Stored as sent, usually with `type`, `message`, `stackTrace` and `inner`. Objects and arrays both count as levels. |
 | `traceId`, `spanId` | no | 64 characters | The W3C identifiers of the trace and span. |
-| `properties` | no | JSON object | Structured properties. Stored as sent, and can be nested. |
+| `properties` | no | JSON object, 29 levels | Structured properties. Stored as sent, and can be nested. Objects and arrays both count as levels. |
 
 The Application is always the one the API Key belongs to. An `applicationId` in the body, like any unknown field, is ignored.
 

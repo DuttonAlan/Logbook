@@ -44,7 +44,7 @@ internal static class LogEventJson
     /// <param name="element">The JSON value, which must be an object or null.</param>
     /// <param name="paramName">The name of the parameter, for the error message.</param>
     /// <returns>The storable JSON, or null if there is no value.</returns>
-    /// <exception cref="DomainValidationException">Thrown when the value is not an object, or contains unpaired surrogates.</exception>
+    /// <exception cref="DomainValidationException">Thrown when the value is not an object, is nested too deeply, or contains unpaired surrogates.</exception>
     public static string? NormalizeObject(JsonElement? element, string paramName)
     {
         if (element is not { } value || value.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
@@ -62,7 +62,7 @@ internal static class LogEventJson
         try
         {
             using var writer = new Utf8JsonWriter(buffer, WriterOptions);
-            WriteValue(writer, value);
+            WriteValue(writer, value, paramName);
         }
         catch (InvalidOperationException exception)
         {
@@ -73,8 +73,13 @@ internal static class LogEventJson
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 
-    private static void WriteValue(Utf8JsonWriter writer, JsonElement element)
+    private static void WriteValue(Utf8JsonWriter writer, JsonElement element, string paramName)
     {
+        if (element.ValueKind is JsonValueKind.Object or JsonValueKind.Array && writer.CurrentDepth >= LogEvent.MaxJsonDepth)
+        {
+            throw new DomainValidationException($"The value must not be nested more than {LogEvent.MaxJsonDepth} levels deep.", paramName);
+        }
+
         switch (element.ValueKind)
         {
             case JsonValueKind.Object:
@@ -83,7 +88,7 @@ internal static class LogEventJson
                 foreach (var property in element.EnumerateObject())
                 {
                     writer.WritePropertyName(ReplaceNullCharacters(property.Name));
-                    WriteValue(writer, property.Value);
+                    WriteValue(writer, property.Value, paramName);
                 }
 
                 writer.WriteEndObject();
@@ -94,7 +99,7 @@ internal static class LogEventJson
 
                 foreach (var item in element.EnumerateArray())
                 {
-                    WriteValue(writer, item);
+                    WriteValue(writer, item, paramName);
                 }
 
                 writer.WriteEndArray();

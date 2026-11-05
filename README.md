@@ -63,9 +63,9 @@ Logbook is built in milestones, each ending with something usable. Version 1.0 i
 |---|---|
 | M0 | Foundations: solution, CI, container images, documentation |
 | M1 ✅ | Log API: Applications, API Keys, ingestion and query |
-| M2 | C# SDK: `ILogger` provider, published to NuGet |
+| M2 ✅ | C# SDK: `ILogger` provider |
 | M3 | Web interface: log explorer with filters and live tail |
-| M4 | Security and operations: sign-in, retention, production guide |
+| M4 | Security and operations: sign-in, retention, production guide, packages on NuGet |
 
 After 1.0: request and dependency tracking, dashboards, alerts and OpenTelemetry (OTLP) ingestion. Details: [roadmap](docs/roadmap.md).
 

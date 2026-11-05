@@ -57,7 +57,7 @@ src/Logbook.Core              domain entities and use cases; no ASP.NET Core or 
 src/Logbook.Infrastructure    EF Core, PostgreSQL, background services
 src/Logbook.Api               controllers, Program.cs, hosts the web interface
 src/Logbook.Web               web interface (React, TypeScript, Vite)
-sdk/Logbook.Sdk               client: buffering, batching, sending (netstandard2.0, net10.0)
+sdk/Logbook.Sdk               client: buffering, batching, sending
 sdk/Logbook.Extensions.Logging  ILogger provider
 sdk/Logbook.AspNetCore        request and dependency tracking
 samples/SampleWebApp          application to try the SDK against a local server
@@ -92,7 +92,6 @@ Dependencies of the server point inward only: `Api → Core ← Infrastructure`.
 
 - The SDK must never throw into or block the host application. Logging calls only enqueue; sending happens in the background. When the server is unreachable, the SDK retries, then drops the oldest events.
 - Every SDK change needs a test for the failure path, e.g. the server is down or slow.
-- The SDK targets `netstandard2.0`, so use only APIs available there or guard them with `#if NET`.
 
 **Security rules**
 
