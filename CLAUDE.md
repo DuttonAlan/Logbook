@@ -81,7 +81,7 @@ The documentation follows Diátaxis (`docs/README.md` is the index). Keep it in 
 
 - `docs/tutorials/` – learning by doing (Docker Compose quickstart).
 - `docs/how-to/` – task guides (run from source; later: production deployment, reverse proxy, connect an application).
-- `docs/reference/` – exact facts: `configuration.md` (every setting, default and limit), `log-api.md`, `admin-api.md`, `health-checks.md`.
+- `docs/reference/` – exact facts: `configuration.md` (every setting, default and limit), `log-api.md`, `admin-api.md`, `health-checks.md`, `sdk-behavior.md`.
 - `docs/explanation/` – design and reasoning: architecture.
 - `docs/roadmap.md` – the milestones M0–M8 with their features. Tick off items as they are built.
 - Website: VitePress builds `docs/` (`.github/workflows/docs.yml`, GitHub Pages). `docs/index.md` is the homepage, `docs/README.md` becomes `/overview`, the sidebar is in `docs/.vitepress/config.mts`, so a new page must be added there. Links that leave `docs/` are rewritten to GitHub at build time. Check with `npm ci && npm run build` in `docs/` (fails on dead links).

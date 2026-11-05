@@ -18,12 +18,16 @@ public sealed class LogbookClientTests
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(2);
 
+    // These tests are not about the shutdown, so it should not make those that end with a request under way slow.
+    private static readonly TimeSpan ShortShutdown = TimeSpan.FromMilliseconds(50);
+
     private static readonly LogbookOptions BaseOptions = new()
     {
         Endpoint = new Uri("https://logbook.example.com"),
         ApiKey = "the-api-key",
         BatchSize = 3,
-        FlushInterval = Interval
+        FlushInterval = Interval,
+        ShutdownTimeout = ShortShutdown
     };
 
     private readonly FakeTimeProvider _time = new();
@@ -119,6 +123,7 @@ public sealed class LogbookClientTests
         {
             Endpoint = BaseOptions.Endpoint,
             ApiKey = BaseOptions.ApiKey,
+            ShutdownTimeout = ShortShutdown,
             FlushInterval = Interval,
             BatchSize = 100,
             MaxRequestBytes = 2500
@@ -142,9 +147,11 @@ public sealed class LogbookClientTests
         {
             Endpoint = BaseOptions.Endpoint,
             ApiKey = BaseOptions.ApiKey,
+            ShutdownTimeout = ShortShutdown,
             FlushInterval = Interval,
             BatchSize = 1,
-            MaxRequestBytes = 500
+            MaxRequestBytes = 500,
+            MaxEventBytes = 10_000
         });
 
         Enqueue(client, new string('x', 1000), "small");
@@ -267,6 +274,7 @@ public sealed class LogbookClientTests
         {
             Endpoint = BaseOptions.Endpoint,
             ApiKey = BaseOptions.ApiKey,
+            ShutdownTimeout = ShortShutdown,
             FlushInterval = Interval,
             BatchSize = 3,
             MaxQueueSize = 3
@@ -295,6 +303,7 @@ public sealed class LogbookClientTests
         {
             Endpoint = BaseOptions.Endpoint,
             ApiKey = BaseOptions.ApiKey,
+            ShutdownTimeout = ShortShutdown,
             FlushInterval = Interval,
             BatchSize = 100,
             MaxQueueSize = 5
@@ -324,6 +333,7 @@ public sealed class LogbookClientTests
         {
             Endpoint = BaseOptions.Endpoint,
             ApiKey = BaseOptions.ApiKey,
+            ShutdownTimeout = ShortShutdown,
             FlushInterval = Interval,
             BatchSize = 10,
             MaxQueueSize = 100
@@ -462,11 +472,11 @@ public sealed class LogbookClientTests
         await canceled.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
     }
 
-    private static void Enqueue(LogbookClient client, params string[] messages)
+    private void Enqueue(LogbookClient client, params string[] messages)
     {
         foreach (var message in messages)
         {
-            client.Enqueue(new LogbookEvent(DateTimeOffset.UnixEpoch, LogbookLevel.Information, message));
+            client.Enqueue(new LogbookEvent(_time.GetUtcNow(), LogbookLevel.Information, message));
         }
     }
 
@@ -475,17 +485,5 @@ public sealed class LogbookClientTests
         return new LogbookClient(options ?? BaseOptions, handler, _time);
     }
 
-    // Moves the clock until the condition holds, since the sender may start waiting just after any given move. The limit
-    // is only there so that a bug ends in a failure instead of a test that hangs.
-    private async Task AdvanceUntilAsync(Func<bool> condition)
-    {
-        using var limit = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        limit.CancelAfter(TimeSpan.FromSeconds(30));
-
-        while (!condition())
-        {
-            _time.Advance(Interval);
-            await Task.Delay(1, limit.Token);
-        }
-    }
+    private Task AdvanceUntilAsync(Func<bool> condition) => _time.AdvanceUntilAsync(Interval, condition);
 }

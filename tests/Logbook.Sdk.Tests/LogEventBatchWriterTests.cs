@@ -13,8 +13,6 @@ namespace Logbook.Sdk.Tests;
 /// </summary>
 public sealed class LogEventBatchWriterTests
 {
-    private const int NoLimit = int.MaxValue;
-
     private static readonly DateTimeOffset Timestamp = new(2026, 11, 4, 10, 15, 0, 123, TimeSpan.Zero);
 
     [Fact]
@@ -33,7 +31,7 @@ public sealed class LogEventBatchWriterTests
             spanId: "00f067aa0ba902b7",
             propertiesJson: """{"OrderId":42,"Nested":{"a":[1,2]}}""");
 
-        var root = Decompress(LogEventBatchWriter.Write(Events(logEvent), NoLimit));
+        var root = Decompress(Write(Events(logEvent)));
 
         var element = Assert.Single(root.EnumerateArray());
         Assert.Equal("2026-11-04T10:15:00.123+00:00", element.GetProperty("timestamp").GetString());
@@ -53,7 +51,7 @@ public sealed class LogEventBatchWriterTests
     [Fact]
     public void Write_LeavesOutFieldsWithoutAValue()
     {
-        var root = Decompress(LogEventBatchWriter.Write(Events(new LogbookEvent(Timestamp, LogbookLevel.Debug, null)), NoLimit));
+        var root = Decompress(Write(Events(new LogbookEvent(Timestamp, LogbookLevel.Debug, null))));
 
         var element = Assert.Single(root.EnumerateArray());
         Assert.Equal(["timestamp", "level", "message"], element.EnumerateObject().Select(property => property.Name));
@@ -70,7 +68,7 @@ public sealed class LogEventBatchWriterTests
     [InlineData((LogbookLevel)99, "Information")]
     public void Write_Level_UsesTheNameTheServerAccepts(LogbookLevel level, string expected)
     {
-        var root = Decompress(LogEventBatchWriter.Write(Events(new LogbookEvent(Timestamp, level, "x")), NoLimit));
+        var root = Decompress(Write(Events(new LogbookEvent(Timestamp, level, "x"))));
 
         Assert.Equal(expected, root[0].GetProperty("level").GetString());
     }
@@ -87,7 +85,7 @@ public sealed class LogEventBatchWriterTests
     {
         var logEvent = new LogbookEvent(Timestamp, LogbookLevel.Error, "kept", exceptionJson: json, propertiesJson: json);
 
-        var root = Decompress(LogEventBatchWriter.Write(Events(logEvent), NoLimit));
+        var root = Decompress(Write(Events(logEvent)));
 
         var element = Assert.Single(root.EnumerateArray());
         Assert.Equal("kept", element.GetProperty("message").GetString());
@@ -100,7 +98,7 @@ public sealed class LogEventBatchWriterTests
     {
         var logEvent = new LogbookEvent(Timestamp, LogbookLevel.Information, "x", propertiesJson: """{"a":"\uD83C\uDF89"}""");
 
-        var root = Decompress(LogEventBatchWriter.Write(Events(logEvent), NoLimit));
+        var root = Decompress(Write(Events(logEvent)));
 
         Assert.Equal("🎉", root[0].GetProperty("properties").GetProperty("a").GetString());
     }
@@ -111,11 +109,10 @@ public sealed class LogEventBatchWriterTests
         var accepted = NestedObject(29);
         var tooDeep = NestedObject(30);
 
-        var root = Decompress(LogEventBatchWriter.Write(
+        var root = Decompress(Write(
             Events(
                 new LogbookEvent(Timestamp, LogbookLevel.Error, "accepted", propertiesJson: accepted),
-                new LogbookEvent(Timestamp, LogbookLevel.Error, "too deep", propertiesJson: tooDeep)),
-            NoLimit));
+                new LogbookEvent(Timestamp, LogbookLevel.Error, "too deep", propertiesJson: tooDeep))));
 
         Assert.True(root[0].TryGetProperty("properties", out _));
         Assert.False(root[1].TryGetProperty("properties", out _));
@@ -126,7 +123,7 @@ public sealed class LogEventBatchWriterTests
     {
         const string Message = "äöü 日本語 🎉 \"quoted\" back\\slash <tag> line\nbreak \u0001";
 
-        var root = Decompress(LogEventBatchWriter.Write(Events(new LogbookEvent(Timestamp, LogbookLevel.Information, Message)), NoLimit));
+        var root = Decompress(Write(Events(new LogbookEvent(Timestamp, LogbookLevel.Information, Message))));
 
         Assert.Equal(Message, root[0].GetProperty("message").GetString());
     }
@@ -134,7 +131,7 @@ public sealed class LogEventBatchWriterTests
     [Fact]
     public void Write_NonAsciiText_IsSentAsUtf8_SoItTakesLessOfTheRequestLimit()
     {
-        var batch = LogEventBatchWriter.Write(Events(new LogbookEvent(Timestamp, LogbookLevel.Information, "äöü")), NoLimit);
+        var batch = Write(Events(new LogbookEvent(Timestamp, LogbookLevel.Information, "äöü")));
 
         Assert.Contains("\"message\":\"äöü\"", DecompressToText(batch));
     }
@@ -142,11 +139,10 @@ public sealed class LogEventBatchWriterTests
     [Fact]
     public void Write_ALoneSurrogate_DoesNotFailTheBatch()
     {
-        var batch = LogEventBatchWriter.Write(
+        var batch = Write(
             Events(
                 new LogbookEvent(Timestamp, LogbookLevel.Information, "broken \uD800 text"),
-                new LogbookEvent(Timestamp, LogbookLevel.Information, "fine")),
-            NoLimit);
+                new LogbookEvent(Timestamp, LogbookLevel.Information, "fine")));
 
         var root = Decompress(batch);
 
@@ -160,7 +156,7 @@ public sealed class LogEventBatchWriterTests
     {
         var logEvent = new LogbookEvent(Timestamp, LogbookLevel.Information, "x", propertiesJson: "{\"a\":\"\uD800\"}");
 
-        var root = Decompress(LogEventBatchWriter.Write(Events(logEvent), NoLimit));
+        var root = Decompress(Write(Events(logEvent)));
 
         Assert.Equal("x", root[0].GetProperty("message").GetString());
         Assert.False(root[0].TryGetProperty("properties", out _));
@@ -171,7 +167,7 @@ public sealed class LogEventBatchWriterTests
     {
         var events = Events(Enumerable.Range(0, 10).Select(index => new LogbookEvent(Timestamp, LogbookLevel.Information, new string('x', 1000))).ToArray());
 
-        var batch = LogEventBatchWriter.Write(events, 3500);
+        var batch = Write(events, 3500);
 
         var text = DecompressToText(batch);
         Assert.True(Encoding.UTF8.GetByteCount(text) <= 3500);
@@ -184,21 +180,64 @@ public sealed class LogEventBatchWriterTests
     public void Write_AnEventThatExactlyFillsTheRequest_IsKept()
     {
         var events = Events(new LogbookEvent(Timestamp, LogbookLevel.Information, "exact"));
-        var size = Encoding.UTF8.GetByteCount(DecompressToText(LogEventBatchWriter.Write(events, NoLimit)));
+        var size = Encoding.UTF8.GetByteCount(DecompressToText(Write(events)));
 
-        Assert.Equal(1, LogEventBatchWriter.Write(events, size).Count);
-        Assert.Equal(0, LogEventBatchWriter.Write(events, size - 1).Count);
+        Assert.Equal(1, Write(events, size).Count);
+        Assert.Equal(0, Write(events, size - 1).Count);
     }
 
     [Fact]
-    public void Write_AFirstEventTooLargeForARequest_ReturnsNoEventsAndItsSequence()
+    public void Write_AFirstEventTooLargeForARequest_IsLeftOut_AndTheNextEventIsWritten()
     {
         var events = Events(new LogbookEvent(Timestamp, LogbookLevel.Information, new string('x', 1000)), new LogbookEvent(Timestamp, LogbookLevel.Information, "small"));
 
-        var batch = LogEventBatchWriter.Write(events, 500);
+        var batch = Write(events, 500);
+
+        Assert.Equal(1, batch.Count);
+        Assert.Equal(1, batch.TooLargeCount);
+        Assert.Equal(events[1].Sequence, batch.LastSequence);
+        Assert.Equal("small", Decompress(batch)[0].GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public void Write_OnlyEventsThatCannotBeSent_ReturnsNoBody_AndCoversThemAll()
+    {
+        var events = Events(new LogbookEvent(Timestamp.AddDays(-8), LogbookLevel.Information, "old"), new LogbookEvent(Timestamp.AddDays(2), LogbookLevel.Information, "future"));
+
+        var batch = Write(events);
 
         Assert.Equal(0, batch.Count);
-        Assert.Equal(events[0].Sequence, batch.LastSequence);
+        Assert.Empty(batch.Body);
+        Assert.Equal(2, batch.ExpiredCount);
+        Assert.Equal(events[1].Sequence, batch.LastSequence);
+    }
+
+    [Fact]
+    public void Write_AnEventInTheMiddleThatCannotBeSent_IsLeftOut_AndTheBodyStaysValid()
+    {
+        var events = Events(
+            new LogbookEvent(Timestamp, LogbookLevel.Information, "first"),
+            new LogbookEvent(Timestamp.AddDays(-8), LogbookLevel.Information, "old"),
+            new LogbookEvent(Timestamp, LogbookLevel.Information, "last"));
+
+        var batch = Write(events);
+
+        var root = Decompress(batch);
+        Assert.Equal(["first", "last"], root.EnumerateArray().Select(element => element.GetProperty("message").GetString()));
+        Assert.Equal(1, batch.ExpiredCount);
+        Assert.Equal(events[2].Sequence, batch.LastSequence);
+    }
+
+    private static LogEventBatch Write(BufferedEvent[] events, int maxRequestBytes = int.MaxValue)
+    {
+        var limits = new LogEventLimits(new LogbookOptions
+        {
+            MaxRequestBytes = maxRequestBytes,
+            MaxEventBytes = int.MaxValue,
+            MaxMessageLength = int.MaxValue
+        });
+
+        return LogEventBatchWriter.Write(events, limits, Timestamp);
     }
 
     private static string NestedObject(int depth)

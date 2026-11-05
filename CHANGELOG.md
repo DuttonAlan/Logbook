@@ -19,7 +19,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Ingestion queue: accepted Log Events are written to the database in batches by a background service, and what is left is written on shutdown. `POST /api/v1/logs` returns `503` with `Retry-After` when the queue is full. Settings `LogIngestion:MaxQueuedBytes`, `LogIngestion:WriteBatchSize` and `LogIngestion:WriteInterval`.
 - Search: `GET /api/v1/logs` finds Log Events by time range, level, Application, Environment and full-text search on the message, newest first with cursor paging. It requires the admin key.
 - Rate limit per API Key on `POST /api/v1/logs`: `429` with `Retry-After` above `RateLimiting:ApiKeyPermitsPerMinute`, by default 6000 requests per minute. Requests with an invalid API Key are limited per IP address by `RateLimiting:InvalidApiKeyPermitsPerMinute`, by default 600 per minute. API Keys and IP addresses over a limit are logged as warnings, at most once per minute.
-- SDK client: `LogbookClient` in `Logbook.Sdk` buffers Log Events in memory and sends them in the background, compressed with gzip, in batches by number, size and time. When the buffer is full, the oldest events are dropped. New options `MaxQueueBytes` and `MaxRequestBytes`. A failed request is sent again after `FlushInterval`; backoff, `Retry-After`, size guards and flush on shutdown are still to come in M2.
+- SDK client: `LogbookClient` in `Logbook.Sdk` buffers Log Events in memory and sends them in the background, compressed with gzip, in batches by number, size and time. When the buffer is full, the oldest events are dropped. New options `MaxQueueBytes` and `MaxRequestBytes`.
+- SDK failure handling: exponential backoff with `Retry-After` after `408`, `429`, `5xx` and connection failures, a backoff of about a minute after `401` and other refusals, and no retry after `400`, `413`, `415` and `422`. See [SDK behavior](docs/reference/sdk-behavior.md).
+- SDK size guards: events over a limit of the server have their long text cut and get the property `logbook.truncated`, and are dropped only if still too large. Events outside of the accepted time window are dropped. New options `MaxEventBytes`, `MaxMessageLength`, `MaxEventAge`, `MaxFutureOffset` and `RequestTimeout`.
+- SDK shutdown: disposing the client sends what is left, for at most the new option `ShutdownTimeout`.
+- SDK diagnostics through an `EventSource` named `Logbook-Sdk`.
 
 ### Changed
 

@@ -8,14 +8,16 @@ namespace Logbook.Sdk;
 ///     Sends events to a Logbook server: they wait in a bounded in-memory buffer and are sent in batches in the background.
 /// </summary>
 /// <remarks>
-///     The client never throws into and never blocks the host application. With options it cannot work with, e.g. without
-///     an <see cref="LogbookOptions.Endpoint"/>, it stays disabled and ignores all events. Create one client and keep it
-///     for the lifetime of the application.
+///     The client never throws into the host application, and only makes it wait when it is disposed, for at most
+///     <see cref="LogbookOptions.ShutdownTimeout"/>. With options it cannot work with, e.g. without an
+///     <see cref="LogbookOptions.Endpoint"/>, it stays disabled and ignores all events. Create one client and keep it for
+///     the lifetime of the application. What it does can be followed through the <c>EventSource</c> named <c>Logbook-Sdk</c>.
 /// </remarks>
 public sealed class LogbookClient : IDisposable
 {
     private readonly LogEventBuffer? _buffer;
     private readonly LogEventSender? _sender;
+    private readonly LogEventLimits? _limits;
 
     private int _disposed;
 
@@ -36,31 +38,38 @@ public sealed class LogbookClient : IDisposable
     /// <param name="timeProvider">The clock for the waiting times.</param>
     internal LogbookClient(LogbookOptions options, HttpMessageHandler? handler, TimeProvider timeProvider)
     {
-        if (options is null || !options.IsValid())
+        var invalidSetting = options is null ? nameof(options) : options.FindInvalidSetting();
+
+        if (invalidSetting is not null)
         {
+            LogbookEventSource.Log.ClientDisabled(invalidSetting);
             return;
         }
 
         try
         {
+            var limits = new LogEventLimits(options!);
+
             var buffer = new LogEventBuffer(
-                options.MaxQueueSize,
+                options!.MaxQueueSize,
                 options.MaxQueueBytes,
                 options.BatchSize,
                 options.MaxRequestBytes,
                 timeProvider);
 
-            var sender = new LogEventSender(options, buffer, handler, timeProvider);
+            var sender = new LogEventSender(options, limits, buffer, handler, timeProvider);
             sender.Start();
 
+            _limits = limits;
             _buffer = buffer;
             _sender = sender;
         }
 #pragma warning disable CA1031 // The client must never throw into the host application.
-        catch (Exception)
+        catch (Exception exception)
 #pragma warning restore CA1031
         {
             // E.g. a platform without support for the default handler. Logging is not worth failing the host for.
+            LogbookEventSource.Log.ClientDisabled(exception.GetType().Name);
         }
     }
 
@@ -87,7 +96,11 @@ public sealed class LogbookClient : IDisposable
 
         try
         {
-            _buffer?.Add(logEvent);
+            if (_buffer is not null)
+            {
+                // Only the cheap part of the guard runs here. It also keeps a huge message from pushing out other events.
+                _buffer.Add(LogEventGuard.CutLongMessages(logEvent, _limits!));
+            }
         }
 #pragma warning disable CA1031 // The client must never throw into the host application.
         catch (Exception)
@@ -98,7 +111,8 @@ public sealed class LogbookClient : IDisposable
     }
 
     /// <summary>
-    ///     Stops sending in the background. Events that were not sent yet are lost.
+    ///     Sends the remaining events and stops sending in the background. This waits for at most
+    ///     <see cref="LogbookOptions.ShutdownTimeout"/>. Events that could not be sent by then are lost.
     /// </summary>
     public void Dispose()
     {

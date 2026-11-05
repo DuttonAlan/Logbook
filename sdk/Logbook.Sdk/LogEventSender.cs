@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 // See the LICENSE file in the project root for license information.
 
+using System.Globalization;
 using System.Net.Http.Headers;
 
 namespace Logbook.Sdk;
@@ -11,7 +12,8 @@ namespace Logbook.Sdk;
 /// </summary>
 /// <remarks>
 ///     Every attempt reads the oldest events again, so a batch that failed gets sent without the events that were dropped
-///     in the meantime. Events leave the buffer only after the server has accepted them.
+///     in the meantime. Events leave the buffer once the server has accepted them, or has said that sending them again
+///     would not help.
 /// </remarks>
 internal sealed class LogEventSender : IDisposable
 {
@@ -26,9 +28,16 @@ internal sealed class LogEventSender : IDisposable
     private readonly Uri _logsUri;
     private readonly string _apiKey;
     private readonly int _batchSize;
-    private readonly int _maxRequestBytes;
+    private readonly LogEventLimits _limits;
     private readonly TimeSpan _flushInterval;
+    private readonly TimeSpan _shutdownTimeout;
+    private readonly RetryBackoff _backoff = new();
+
+    // Ends all waiting, so what is left gets sent. A request that is under way may still finish.
     private readonly CancellationTokenSource _stopping = new();
+
+    // Ends a request that is under way, when the time for the shutdown has run out.
+    private readonly CancellationTokenSource _aborting = new();
 
     private Task _loop = Task.CompletedTask;
 
@@ -36,11 +45,13 @@ internal sealed class LogEventSender : IDisposable
     ///     Creates the sender.
     /// </summary>
     /// <param name="options">The options, which must be valid.</param>
+    /// <param name="limits">The limits for the events.</param>
     /// <param name="buffer">The buffer to send from.</param>
     /// <param name="handler">The handler for the requests, or null for the default.</param>
     /// <param name="timeProvider">The clock for the waiting times.</param>
     public LogEventSender(
         LogbookOptions options,
+        LogEventLimits limits,
         LogEventBuffer buffer,
         HttpMessageHandler? handler,
         TimeProvider timeProvider)
@@ -49,14 +60,15 @@ internal sealed class LogEventSender : IDisposable
         _timeProvider = timeProvider;
 
 #pragma warning disable CA2000 // The HttpClient owns the handler and disposes it.
-        _httpClient = new HttpClient(handler ?? CreateDefaultHandler());
+        _httpClient = new HttpClient(handler ?? CreateDefaultHandler()) { Timeout = options.RequestTimeout };
 #pragma warning restore CA2000
 
         _logsUri = new Uri(options.Endpoint!.GetLeftPart(UriPartial.Path).TrimEnd('/') + LogsPath);
         _apiKey = options.ApiKey!;
         _batchSize = options.BatchSize;
-        _maxRequestBytes = options.MaxRequestBytes;
+        _limits = limits;
         _flushInterval = options.FlushInterval;
+        _shutdownTimeout = options.ShutdownTimeout;
     }
 
     /// <summary>
@@ -73,17 +85,26 @@ internal sealed class LogEventSender : IDisposable
     }
 
     /// <summary>
-    ///     Stops the loop without waiting for it. Events that were not sent yet are lost.
+    ///     Sends what is left, for at most the shutdown timeout, and stops the loop. Events that could not be sent by then
+    ///     are lost.
     /// </summary>
     public void Dispose()
     {
-        _stopping.Cancel();
+        // Not on this thread: canceling can run the loop right here, and a slow start of a request would then not be
+        // limited by the timeout below.
+        _ = Task.Run(_stopping.Cancel);
+
+        if (!_loop.Wait(_shutdownTimeout))
+        {
+            _aborting.Cancel();
+        }
 
         _ = _loop.ContinueWith(
             _ =>
             {
                 _httpClient.Dispose();
                 _stopping.Dispose();
+                _aborting.Dispose();
             },
             CancellationToken.None,
             TaskContinuationOptions.None,
@@ -119,26 +140,58 @@ internal sealed class LogEventSender : IDisposable
 
         while (!stopping.IsCancellationRequested)
         {
+            TimeSpan? retryDelay;
+
             try
             {
                 await WaitUntilBatchIsDueAsync(stopping).ConfigureAwait(false);
 
-                if (await TrySendNextBatchAsync(stopping).ConfigureAwait(false))
-                {
-                    continue;
-                }
+                retryDelay = await SendNextBatchAsync().ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+            {
+                break;
             }
 #pragma warning disable CA1031 // The client must never throw into the host application.
-            catch (Exception)
+            catch (Exception exception)
 #pragma warning restore CA1031
             {
                 // Whatever happened, the loop must go on and the host application must not notice. The events stay in
                 // the buffer, so this is a failed attempt like any other.
+                retryDelay = _backoff.NextDelay();
+                LogbookEventSource.Log.RequestFailed(exception.GetType().Name, 0, ToMilliseconds(retryDelay.Value));
             }
 
-            // Not observing the task: when stopping, it ends as canceled and the loop condition ends the loop.
-            await Task.WhenAny(DelayAsync(_flushInterval, stopping)).ConfigureAwait(false);
+            ReportFullBuffer();
+
+            if (retryDelay is { } delay)
+            {
+                // Not observing the task: when stopping, it ends as canceled and the loop condition ends the loop.
+                await Task.WhenAny(DelayAsync(delay, stopping)).ConfigureAwait(false);
+            }
         }
+
+        await SendWhatIsLeftAsync().ConfigureAwait(false);
+    }
+
+    // One failure ends this: with the server down, there is no point in using up the time of the shutdown.
+    private async Task SendWhatIsLeftAsync()
+    {
+        try
+        {
+            while (_buffer.Count > 0 && await SendNextBatchAsync().ConfigureAwait(false) is null)
+            {
+            }
+        }
+#pragma warning disable CA1031 // The client must never throw into the host application.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+            // The time ran out, or something unexpected happened. Either way, what is left is reported below.
+        }
+
+        ReportFullBuffer();
+        ReportDropped(LogbookEventSource.ReasonShutdown, _buffer.DropThrough(long.MaxValue));
     }
 
     private async Task WaitUntilBatchIsDueAsync(CancellationToken stopping)
@@ -156,22 +209,27 @@ internal sealed class LogEventSender : IDisposable
         }
     }
 
-    private async Task<bool> TrySendNextBatchAsync(CancellationToken stopping)
+    /// <summary>
+    ///     Sends the oldest events.
+    /// </summary>
+    /// <returns>The time to wait before trying again if the attempt failed, or null if the loop can go on.</returns>
+    private async Task<TimeSpan?> SendNextBatchAsync()
     {
         var events = _buffer.Peek(_batchSize);
 
         if (events.Count == 0)
         {
-            return true;
+            return null;
         }
 
-        var batch = LogEventBatchWriter.Write(events, _maxRequestBytes);
+        var batch = LogEventBatchWriter.Write(events, _limits, _timeProvider.GetUtcNow());
 
         if (batch.Count == 0)
         {
-            // The event could never be sent, so waiting would only hold up the others.
             _buffer.DropThrough(batch.LastSequence);
-            return true;
+            ReportLeftOut(batch);
+
+            return null;
         }
 
         using var request = new HttpRequestMessage(HttpMethod.Post, _logsUri) { Content = new ByteArrayContent(batch.Body) };
@@ -179,19 +237,111 @@ internal sealed class LogEventSender : IDisposable
         request.Content.Headers.ContentType = JsonContentType;
         request.Content.Headers.ContentEncoding.Add("gzip");
 
-        using var response = await _httpClient
-            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, stopping)
-            .ConfigureAwait(false);
-
-        if (!response.IsSuccessStatusCode)
+        try
         {
-            return false;
+            using var response = await _httpClient
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, _aborting.Token)
+                .ConfigureAwait(false);
+
+            return HandleResponse(response, batch);
         }
+        catch (Exception exception) when (exception is HttpRequestException or OperationCanceledException && !_aborting.IsCancellationRequested)
+        {
+            // The server is down or did not answer in time.
+            var delay = _backoff.NextDelay();
+            LogbookEventSource.Log.RequestFailed(exception.GetType().Name, batch.Count, ToMilliseconds(delay));
 
-        _buffer.RemoveThrough(batch.LastSequence);
-
-        return true;
+            return delay;
+        }
     }
+
+    private TimeSpan? HandleResponse(HttpResponseMessage response, LogEventBatch batch)
+    {
+        var statusCode = (int)response.StatusCode;
+
+        switch (ClassifyResponse(statusCode))
+        {
+            case ResponseKind.Delivered:
+                _backoff.Reset();
+                _buffer.RemoveThrough(batch.LastSequence, batch.ExpiredCount + batch.TooLargeCount);
+                ReportLeftOut(batch);
+                LogbookEventSource.Log.BatchSent(batch.Count, batch.Body.Length);
+
+                if (batch.TruncatedCount > 0)
+                {
+                    LogbookEventSource.Log.EventsTruncated(batch.TruncatedCount);
+                }
+
+                return null;
+
+            case ResponseKind.Rejected:
+                // The same batch would fail again. This is not an outage, so the next batch can go right away.
+                _backoff.Reset();
+                _buffer.DropThrough(batch.LastSequence);
+                ReportLeftOut(batch);
+                LogbookEventSource.Log.BatchRejected(statusCode, batch.Count);
+
+                return null;
+
+            case ResponseKind.Refused:
+                var longDelay = _backoff.NextRefusedDelay();
+                LogbookEventSource.Log.RequestRefused(statusCode, batch.Count, ToMilliseconds(longDelay));
+
+                return longDelay;
+
+            default:
+                var delay = _backoff.NextDelay(GetRetryAfter(response));
+                LogbookEventSource.Log.RequestFailed(statusCode.ToString(CultureInfo.InvariantCulture), batch.Count, ToMilliseconds(delay));
+
+                return delay;
+        }
+    }
+
+    private static ResponseKind ClassifyResponse(int statusCode)
+    {
+        return statusCode switch
+        {
+            >= 200 and < 300 => ResponseKind.Delivered,
+
+            // Bad request, content too large, unsupported media type, unprocessable content.
+            400 or 413 or 415 or 422 => ResponseKind.Rejected,
+
+            // Request timeout, too many requests, and the server or a proxy in front of it having a problem.
+            408 or 429 or >= 500 => ResponseKind.Temporary,
+
+            // A wrong or revoked API Key, a wrong address, a redirect. The events are not at fault and someone may fix this,
+            // but not soon, so asking again every few seconds would only add load.
+            _ => ResponseKind.Refused
+        };
+    }
+
+    private TimeSpan? GetRetryAfter(HttpResponseMessage response)
+    {
+        var retryAfter = response.Headers.RetryAfter;
+
+        return retryAfter?.Delta ?? (retryAfter?.Date - _timeProvider.GetUtcNow());
+    }
+
+    private void ReportFullBuffer()
+    {
+        ReportDropped(LogbookEventSource.ReasonBufferFull, _buffer.TakeUnreportedFullCount());
+    }
+
+    private static void ReportLeftOut(LogEventBatch batch)
+    {
+        ReportDropped(LogbookEventSource.ReasonExpired, batch.ExpiredCount);
+        ReportDropped(LogbookEventSource.ReasonTooLarge, batch.TooLargeCount);
+    }
+
+    private static void ReportDropped(string reason, int count)
+    {
+        if (count > 0)
+        {
+            LogbookEventSource.Log.EventsDropped(reason, count);
+        }
+    }
+
+    private static int ToMilliseconds(TimeSpan delay) => (int)delay.TotalMilliseconds;
 
     private Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken)
     {
@@ -200,5 +350,13 @@ internal sealed class LogEventSender : IDisposable
 #else
         return Task.Delay(delay, _timeProvider, cancellationToken);
 #endif
+    }
+
+    private enum ResponseKind
+    {
+        Delivered,
+        Rejected,
+        Temporary,
+        Refused
     }
 }

@@ -27,6 +27,7 @@ internal sealed class LogEventBuffer
     private long _bytes;
     private long _lastSequence;
     private long _droppedCount;
+    private int _unreportedFullCount;
     private TaskCompletionSource<bool>? _signal;
 
     /// <summary>
@@ -105,6 +106,7 @@ internal sealed class LogEventBuffer
             if (bytes > _maxBytes)
             {
                 _droppedCount++;
+                _unreportedFullCount++;
                 return;
             }
 
@@ -112,6 +114,7 @@ internal sealed class LogEventBuffer
             {
                 _bytes -= _events.Dequeue().Bytes;
                 _droppedCount++;
+                _unreportedFullCount++;
             }
 
             _events.Enqueue(new BufferedEvent(logEvent, ++_lastSequence, bytes, enqueuedAt));
@@ -189,11 +192,12 @@ internal sealed class LogEventBuffer
     ///     Removes events that were delivered. Those that were dropped while they were being sent are already gone.
     /// </summary>
     /// <param name="sequence">The sequence number of the last event to remove.</param>
-    public void RemoveThrough(long sequence)
+    /// <param name="notDelivered">How many of them were left out of the request and count as dropped.</param>
+    public void RemoveThrough(long sequence, int notDelivered = 0)
     {
         lock (_lock)
         {
-            RemoveThroughCore(sequence);
+            _droppedCount += Math.Min(notDelivered, RemoveThroughCore(sequence));
         }
     }
 
@@ -201,11 +205,31 @@ internal sealed class LogEventBuffer
     ///     Removes events that cannot be delivered and counts them as dropped.
     /// </summary>
     /// <param name="sequence">The sequence number of the last event to drop.</param>
-    public void DropThrough(long sequence)
+    /// <returns>The number of events dropped.</returns>
+    public int DropThrough(long sequence)
     {
         lock (_lock)
         {
-            _droppedCount += RemoveThroughCore(sequence);
+            var removed = RemoveThroughCore(sequence);
+            _droppedCount += removed;
+
+            return removed;
+        }
+    }
+
+    /// <summary>
+    ///     Returns how many events the limits of the buffer have dropped since the last call. Reporting this is left to
+    ///     the sender, so the thread of the host application only ever adds to a number.
+    /// </summary>
+    /// <returns>The number of events.</returns>
+    public int TakeUnreportedFullCount()
+    {
+        lock (_lock)
+        {
+            var count = _unreportedFullCount;
+            _unreportedFullCount = 0;
+
+            return count;
         }
     }
 

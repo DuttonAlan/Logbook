@@ -27,7 +27,7 @@ The image `logbook-migrator` applies the database migrations and exits. It needs
 
 ## SDK
 
-The SDK is configured through `LogbookOptions`, or the section `Logbook` in `appsettings.json` once the `ILogger` provider exists (milestone M2). The options are read once when the client is created. If `Endpoint` or `ApiKey` is missing or a value cannot be used, the client stays disabled and ignores all events instead of failing the application.
+The SDK is configured through `LogbookOptions`, or the section `Logbook` in `appsettings.json` once the `ILogger` provider exists (milestone M2). The options are read once when the client is created. If `Endpoint` or `ApiKey` is missing or a value cannot be used, the client stays disabled and ignores all events instead of failing the application, and [reports](sdk-behavior.md#diagnostics) the setting.
 
 | Setting | Default | Description |
 |---|---|---|
@@ -38,3 +38,11 @@ The SDK is configured through `LogbookOptions`, or the section `Logbook` in `app
 | `MaxQueueSize` | `10000` | Maximum number of events kept in memory. When the buffer is full, the oldest events are dropped. |
 | `MaxQueueBytes` | `67108864` (64 MiB) | Maximum memory of the events in the buffer, counting text at two bytes per character. When the buffer is full, the oldest events are dropped. |
 | `MaxRequestBytes` | `5242880` (5 MiB) | Maximum size of the JSON of one request before compression. Must not be larger than the setting `LogIngestion:MaxRequestBytes` of the server. |
+| `MaxEventBytes` | `262144` (256 KiB) | Maximum size of `message`, `messageTemplate`, `exception` and `properties` of one event together, in UTF-8. A larger event is [cut](sdk-behavior.md#events-over-a-limit). Must not be larger than the setting `LogIngestion:MaxEventBytes` of the server. |
+| `MaxMessageLength` | `65536` | Maximum number of characters of `message` and of `messageTemplate`. Longer text is cut. Must not be larger than the limit of the server, 65,536 characters. |
+| `MaxEventAge` | `7.00:00:00` | Maximum age of an event when it is sent. An older event is dropped. Must not be longer than the setting `LogIngestion:MaxEventAge` of the server. |
+| `MaxFutureOffset` | `1.00:00:00` | How far in the future the timestamp of an event may be. An event beyond that is dropped. Must not be longer than the setting `LogIngestion:MaxFutureOffset` of the server. |
+| `RequestTimeout` | `00:00:30` | Maximum time to wait for the server to answer one request. At most one day. |
+| `ShutdownTimeout` | `00:00:05` | Maximum time disposing the client waits for the remaining events to be sent. `00:00:00` does not wait. At most one day. |
+
+How the client uses these settings when something goes wrong is described in [SDK behavior](sdk-behavior.md).

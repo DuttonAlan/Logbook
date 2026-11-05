@@ -7,23 +7,35 @@ namespace Logbook.Sdk;
 /// <summary>
 ///     One request ready to send.
 /// </summary>
-/// <param name="body">The JSON of the events, compressed with gzip.</param>
-/// <param name="count">The number of events in the body. Zero if the first event was too large for a request.</param>
-/// <param name="lastSequence">The sequence number of the last event this batch covers.</param>
-internal readonly struct LogEventBatch(byte[] body, int count, long lastSequence)
+internal sealed class LogEventBatch
 {
     /// <summary>
-    ///     The JSON of the events, compressed with gzip.
+    ///     The JSON of the events, compressed with gzip. Empty if there are no events.
     /// </summary>
-    public byte[] Body { get; } = body;
+    public byte[] Body { get; set; } = [];
 
     /// <summary>
-    ///     The number of events in the body. Zero if the first event was too large for a request.
+    ///     The number of events in the body.
     /// </summary>
-    public int Count { get; } = count;
+    public int Count { get; set; }
 
     /// <summary>
-    ///     The sequence number of the last event this batch covers.
+    ///     The sequence number of the last event this batch covers, including those it left out.
     /// </summary>
-    public long LastSequence { get; } = lastSequence;
+    public long LastSequence { get; set; }
+
+    /// <summary>
+    ///     The number of events left out because their timestamp is outside of what the server accepts.
+    /// </summary>
+    public int ExpiredCount { get; set; }
+
+    /// <summary>
+    ///     The number of events left out because they are too large, even after cutting their text.
+    /// </summary>
+    public int TooLargeCount { get; set; }
+
+    /// <summary>
+    ///     The number of events in the body whose text was cut.
+    /// </summary>
+    public int TruncatedCount { get; set; }
 }

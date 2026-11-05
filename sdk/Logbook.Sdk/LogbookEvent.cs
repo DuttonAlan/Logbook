@@ -108,6 +108,11 @@ public sealed class LogbookEvent
     public string? PropertiesJson { get; }
 
     /// <summary>
+    ///     Whether text of the Log Event was already cut because of a limit.
+    /// </summary>
+    internal bool IsTruncated { get; set; }
+
+    /// <summary>
     ///     Estimates the memory the Log Event holds while it waits in the buffer. A string takes two bytes for each
     ///     character, so text mostly in ASCII takes about twice as much as it does on the wire.
     /// </summary>
