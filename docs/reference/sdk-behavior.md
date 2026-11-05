@@ -47,7 +47,7 @@ Values are captured during the call, so later changes to an object are not sent.
 
 An `AggregateException` has the array `innerExceptions` instead of `inner`. At most 32 exceptions and 8 levels are sent. If a member of an exception or a value throws, the rest of the event is still sent.
 
-If any of these limits is reached, or text in a value or an exception is over `MaxMessageLength`, the event is marked as [truncated](#events-over-a-limit).
+If any of these limits is reached, or text in a value or an exception or the name of a value is over `MaxMessageLength`, the event is marked as [truncated](#events-over-a-limit).
 
 ## Responses
 

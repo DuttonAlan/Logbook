@@ -220,20 +220,27 @@ internal sealed class EventJsonWriter(int maxTextLength, int maxEventBytes)
         {
             writer.WriteNullValue();
         }
-        else if (text.Length <= maxTextLength)
-        {
-            _remainingText -= text.Length;
-            writer.WriteStringValue(text);
-        }
         else
         {
-            _isTruncated = true;
-            _remainingText -= maxTextLength;
-
-            // Half of a surrogate pair is not valid text.
-            var length = char.IsHighSurrogate(text[maxTextLength - 1]) ? maxTextLength - 1 : maxTextLength;
-            writer.WriteStringValue(text.Substring(0, length));
+            writer.WriteStringValue(LimitText(text));
         }
+    }
+
+    private string LimitText(string text)
+    {
+        if (text.Length <= maxTextLength)
+        {
+            _remainingText -= text.Length;
+            return text;
+        }
+
+        _isTruncated = true;
+        _remainingText -= maxTextLength;
+
+        // Half of a surrogate pair is not valid text.
+        var length = char.IsHighSurrogate(text[maxTextLength - 1]) ? maxTextLength - 1 : maxTextLength;
+
+        return text.Substring(0, length);
     }
 
     private void WriteValue(Utf8JsonWriter writer, object? value, int depth)
@@ -368,8 +375,7 @@ internal sealed class EventJsonWriter(int maxTextLength, int maxEventBytes)
                 break;
             }
 
-            _remainingText -= pair.Key.Length;
-            writer.WritePropertyName(pair.Key);
+            writer.WritePropertyName(LimitText(pair.Key));
             WriteValue(writer, pair.Value, depth);
         }
     }

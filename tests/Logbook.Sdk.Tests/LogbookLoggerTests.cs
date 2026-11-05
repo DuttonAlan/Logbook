@@ -300,6 +300,24 @@ public sealed partial class LogbookLoggerTests
     }
 
     [Fact]
+    public void ALongNameOfAValue_IsCut_AndMarked()
+    {
+        var properties = SendValues((new string('k', 1_000_000), 1));
+
+        Assert.Equal(1, properties.GetProperty(new string('k', 65_536)).GetInt32());
+        Assert.True(properties.GetProperty("logbook.truncated").GetBoolean());
+    }
+
+    [Fact]
+    public void ALongKeyInACollection_IsCut_AndMarked()
+    {
+        var properties = SendValues(("Values", new Dictionary<string, object?> { [new string('k', 1_000_000)] = 1 }));
+
+        Assert.Equal(1, properties.GetProperty("Values").GetProperty(new string('k', 65_536)).GetInt32());
+        Assert.True(properties.GetProperty("logbook.truncated").GetBoolean());
+    }
+
+    [Fact]
     public void TextInValues_SharesOneLimit_ThatLeavesTheEventToBeCutEvenly()
     {
         var properties = SendValues(("Items", Enumerable.Repeat(new string('x', 65_536), 100)));
