@@ -20,6 +20,8 @@ namespace Logbook.Api.ExceptionHandling;
 /// <param name="problemDetailsService">The Service to write the problem details response.</param>
 public sealed class ProblemDetailsExceptionHandler(IProblemDetailsService problemDetailsService) : IExceptionHandler
 {
+    private const string RetryAfterSeconds = "5";
+
     /// <inheritdoc/>
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
@@ -45,6 +47,16 @@ public sealed class ProblemDetailsExceptionHandler(IProblemDetailsService proble
             // ArgumentException is deliberately not mapped for the same reason as InvalidOperationException.
             // Domain and services throw DomainValidationException for invalid input.
             DomainValidationException => (StatusCodes.Status400BadRequest, exception.Message),
+
+            // The request itself was rejected while its body was read, e.g. because it is too large.
+            BadHttpRequestException badRequest => (badRequest.StatusCode, exception.Message),
+
+            ServiceBusyException => (StatusCodes.Status503ServiceUnavailable, exception.Message),
+
+            // The database cannot be reached right now, so the request can be sent again later. EF Core wraps this
+            // exception, e.g. in an InvalidOperationException, so the inner exception counts. The message stays hidden.
+            NpgsqlException { IsTransient: true } or { InnerException: NpgsqlException { IsTransient: true } }
+                => (StatusCodes.Status503ServiceUnavailable, "The database is not available. Send the request again later."),
             _ => (0, null)
         };
 
@@ -54,6 +66,11 @@ public sealed class ProblemDetailsExceptionHandler(IProblemDetailsService proble
         }
 
         httpContext.Response.StatusCode = statusCode;
+
+        if (statusCode == StatusCodes.Status503ServiceUnavailable)
+        {
+            httpContext.Response.Headers.RetryAfter = RetryAfterSeconds;
+        }
 
         return await problemDetailsService.TryWriteAsync(new ProblemDetailsContext
         {

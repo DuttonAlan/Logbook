@@ -38,6 +38,7 @@ The unit Logbook stores. The SDK sends Log Events in batches:
   "messageTemplate": "Order {OrderId} failed",
   "message": "Order 42 failed",
   "category": "Shop.Orders.OrderService",
+  "environment": "Production",
   "eventId": 4001,
   "exception": { "type": "System.InvalidOperationException", "message": "…", "stackTrace": "…", "inner": null },
   "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
@@ -46,7 +47,7 @@ The unit Logbook stores. The SDK sends Log Events in batches:
 }
 ```
 
-Every Log Event belongs to an **Application**, which the server takes from the API Key, and to an **Environment**, e.g. `Production`.
+Every Log Event belongs to an **Application**, which the server takes from the API Key, and to an **Environment**, e.g. `Production`, which the SDK sends. The SDK reads it from `IHostEnvironment` unless the options override it, so one API Key can be used in several Environments. A Log Event without an Environment is stored with the Environment `Unknown`. The Environment is a filter label, not a security boundary; to isolate a stage, give it its own Application.
 
 ---
 
@@ -61,22 +62,22 @@ Every Log Event belongs to an **Application**, which the server takes from the A
 - [x] CI: build, tests, missing-migration check, SDK packages, web interface, container images; CodeQL; Dependabot; release workflow
 - [x] Documentation (Diátaxis, VitePress), README, CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, CHANGELOG
 
-## M1: Log API
+## M1: Log API ✅
 
-- [ ] Entities `Application` and `ApiKey` (only the SHA-256 hash is stored), schema `config`
-- [ ] Entity `LogEvent` in schema `telemetry`, partitioned by day; `properties` and `exception` as `jsonb` with a GIN index; full-text search on `message`
-- [ ] Use cases and admin API to create, list, rename and delete Applications, and to issue and revoke API Keys
-- [ ] `POST /api/v1/logs`: batched JSON, gzip support, size limits per request and per event
-- [ ] API Key authentication with the header `X-Logbook-Key`
-- [ ] Ingestion queue with batched writes (`COPY` or multi-row inserts) in a background service
-- [ ] `GET /api/v1/logs`: filter by time range, level, Application, Environment and text; cursor paging
-- [ ] Rate limits per API Key
-- [ ] Integration tests with Testcontainers; reference docs for the API
+- [x] Entities `Application` and `ApiKey` (only the SHA-256 hash is stored), schema `config`
+- [x] Entity `LogEvent` in schema `telemetry`, partitioned by day; `properties` and `exception` as `jsonb` with a GIN index; full-text search on `message`
+- [x] Use cases and admin API to create, list, rename and delete Applications, and to issue and revoke API Keys, protected by a single configured admin key until sign-in exists (M4)
+- [x] `POST /api/v1/logs`: batched JSON, gzip support, size limits per request and per event
+- [x] API Key authentication with the header `X-Logbook-Key`
+- [x] Ingestion queue with batched writes (`COPY` or multi-row inserts) in a background service
+- [x] `GET /api/v1/logs`: filter by time range, level, Application, Environment and text; cursor paging
+- [x] Rate limits per API Key
+- [x] Integration tests with Testcontainers; reference docs for the API
 
 ## M2: C# SDK
 
 - [ ] `Logbook.Sdk`: bounded `Channel<T>` buffer, background sender, batching by size and time, retries with exponential backoff, drop-oldest when full
-- [ ] `Logbook.Extensions.Logging`: `builder.Logging.AddLogbook(…)`, configuration from the section `Logbook`
+- [ ] `Logbook.Extensions.Logging`: `builder.Logging.AddLogbook(…)`, configuration from the section `Logbook`, Environment from `IHostEnvironment` with an override in the options
 - [ ] Message templates, scopes and `EventId` as structured properties
 - [ ] Exceptions with inner and aggregate exceptions
 - [ ] `traceId` and `spanId` from `Activity.Current`
@@ -97,7 +98,7 @@ Every Log Event belongs to an **Application**, which the server takes from the A
 
 ## M4: Security and operations → 1.0
 
-- [ ] Sign-in to the web interface and admin API: a local administrator first, OpenID Connect (e.g. Authora) next
+- [ ] Sign-in to the web interface and admin API, replacing the admin key: a local administrator first, OpenID Connect (e.g. Authora) next
 - [ ] `/health/details` for authorized monitoring
 - [ ] Security headers, forwarded headers for reverse proxies, refusal to start with insecure production settings
 - [ ] Retention per Application: a background service drops expired partitions

@@ -12,7 +12,7 @@ Never run `git commit`, `git pull` or `git push`. Leave all changes uncommitted 
 
 ```sh
 dotnet build Logbook.slnx                      # warnings are errors (TreatWarningsAsErrors + EnforceCodeStyleInBuild)
-dotnet test --solution Logbook.slnx            # all tests; the integration tests need Docker (Testcontainers starts postgres:17-alpine)
+dotnet test --solution Logbook.slnx            # all tests; the integration tests need Docker (Testcontainers starts postgres:18-alpine)
 
 # Single test class / method (xunit v3 on Microsoft.Testing.Platform, see global.json)
 dotnet test --project tests/Logbook.Api.IntegrationTests --filter-class "*HealthEndpointTests"
@@ -57,7 +57,7 @@ SDK: `sdk/` holds the NuGet packages; shared package settings are in `sdk/Direct
 
 ### Errors
 
-Services throw `NotFoundException` (404), `ConflictException` (409) or `DomainValidationException` (400); `ProblemDetailsExceptionHandler` maps them, plus unique-violation and concurrency `DbUpdateException`s, to 409. `InvalidOperationException`/`ArgumentException` are intentionally **not** mapped and stay 500 — don't throw them for business-rule violations.
+Services throw `NotFoundException` (404), `ConflictException` (409), `DomainValidationException` (400) or `ServiceBusyException` (503 with `Retry-After`); `ProblemDetailsExceptionHandler` maps them, plus unique-violation and concurrency `DbUpdateException`s, to 409, and a database that cannot be reached to 503. `InvalidOperationException`/`ArgumentException` are intentionally **not** mapped and stay 500 — don't throw them for business-rule violations.
 
 ### Conventions
 
@@ -80,7 +80,7 @@ The documentation follows Diátaxis (`docs/README.md` is the index). Keep it in 
 
 - `docs/tutorials/` – learning by doing (Docker Compose quickstart).
 - `docs/how-to/` – task guides (run from source; later: production deployment, reverse proxy, connect an application).
-- `docs/reference/` – exact facts: `configuration.md` (every setting, default and limit), `health-checks.md`.
+- `docs/reference/` – exact facts: `configuration.md` (every setting, default and limit), `log-api.md`, `admin-api.md`, `health-checks.md`.
 - `docs/explanation/` – design and reasoning: architecture.
 - `docs/roadmap.md` – the milestones M0–M8 with their features. Tick off items as they are built.
 - Website: VitePress builds `docs/` (`.github/workflows/docs.yml`, GitHub Pages). `docs/index.md` is the homepage, `docs/README.md` becomes `/overview`, the sidebar is in `docs/.vitepress/config.mts`, so a new page must be added there. Links that leave `docs/` are rewritten to GitHub at build time. Check with `npm ci && npm run build` in `docs/` (fails on dead links).

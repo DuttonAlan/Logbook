@@ -20,10 +20,13 @@ Start here if you are new to Logbook.
 ## How-to guides
 
 - [Run Logbook from source](how-to/run-from-source.md)
+- [Manage Applications and API Keys](how-to/manage-applications.md)
 
 ## Reference
 
 - [Configuration](reference/configuration.md): every setting, its default and its limits
+- [Admin API](reference/admin-api.md): manage Applications and API Keys
+- [Log API](reference/log-api.md): send and search Log Events
 - [Health checks](reference/health-checks.md)
 
 ## Explanation

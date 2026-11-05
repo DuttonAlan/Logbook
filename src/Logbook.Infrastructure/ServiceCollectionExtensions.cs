@@ -2,8 +2,12 @@
 // Licensed under the MIT License.
 // See the LICENSE file in the project root for license information.
 
+using Logbook.Core.Abstractions;
 using Logbook.Infrastructure.HealthChecks;
+using Logbook.Infrastructure.Ingestion;
 using Logbook.Infrastructure.Persistence;
+using Logbook.Infrastructure.Persistence.Repositories;
+using Logbook.Infrastructure.Security;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -38,6 +42,17 @@ public static class ServiceCollectionExtensions
         }
 
         serviceCollection.AddDbContext<LogbookContext>(options => options.UseNpgsql(connectionString));
+
+        serviceCollection.AddTransient<IApplicationRepository, ApplicationRepository>();
+        serviceCollection.AddTransient<ILogEventRepository, LogEventRepository>();
+
+        serviceCollection.AddSingleton<LogEventQueue>();
+        serviceCollection.AddSingleton<ILogEventQueue>(services => services.GetRequiredService<LogEventQueue>());
+        serviceCollection.AddSingleton<LogEventBatchWriter>();
+        serviceCollection.AddHostedService<LogEventWriterService>();
+
+        serviceCollection.AddSingleton<IApiKeyGenerator, ApiKeyGenerator>();
+        serviceCollection.AddSingleton<IApiKeyHasher, Sha256ApiKeyHasher>();
 
         serviceCollection.AddHealthChecks()
             .AddDbContextCheck<LogbookContext>("database", tags: [HealthCheckTags.Ready])
