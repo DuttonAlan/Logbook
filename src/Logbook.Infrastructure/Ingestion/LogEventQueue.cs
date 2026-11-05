@@ -25,9 +25,6 @@ namespace Logbook.Infrastructure.Ingestion;
 /// <param name="logger">The Logger to record that the queue is full.</param>
 public sealed class LogEventQueue(IOptions<LogIngestionOptions> options, ILogger<LogEventQueue> logger) : ILogEventQueue
 {
-    // Roughly what the object and its short strings use besides the content counted by GetContentBytes.
-    private const long EventOverheadBytes = 1024;
-
     // Not created with SingleReader, because that channel does not support Reader.Count.
     private readonly Channel<LogEvent> _channel = Channel.CreateUnbounded<LogEvent>();
 
@@ -112,6 +109,6 @@ public sealed class LogEventQueue(IOptions<LogIngestionOptions> options, ILogger
 
     private static long SizeOf(IReadOnlyCollection<LogEvent> logEvents)
     {
-        return logEvents.Sum(logEvent => logEvent.GetContentBytes() + EventOverheadBytes);
+        return logEvents.Sum(logEvent => logEvent.GetMemoryBytes());
     }
 }

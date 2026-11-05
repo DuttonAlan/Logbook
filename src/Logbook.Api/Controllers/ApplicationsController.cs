@@ -60,6 +60,7 @@ public sealed class ApplicationsController(
     /// <response code="409">Responds with problem details if another Application already has the Name.</response>
     /// <response code="415">Responds with problem details if the request body is not JSON.</response>
     /// <response code="500">Responds with problem details if an unexpected error occurred.</response>
+    /// <response code="503">Responds with problem details and a Retry-After header if the database cannot be reached.</response>
     [HttpPost]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     [ProducesResponseType<CreateApplicationResponse>(StatusCodes.Status201Created, "application/json")]
@@ -67,6 +68,7 @@ public sealed class ApplicationsController(
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status415UnsupportedMediaType, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json")]
     public async Task<IActionResult> Create(
         CreateApplicationRequest request,
         CancellationToken cancellationToken)
@@ -89,9 +91,11 @@ public sealed class ApplicationsController(
     /// <returns>204 No Content.</returns>
     /// <response code="204">Responds with no content once the Application was deleted, or if no Application with the given Id exists.</response>
     /// <response code="500">Responds with problem details if an unexpected error occurred.</response>
+    /// <response code="503">Responds with problem details and a Retry-After header if the database cannot be reached.</response>
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json")]
     public async Task<IActionResult> Delete(
         Guid id,
         CancellationToken cancellationToken)
@@ -108,9 +112,11 @@ public sealed class ApplicationsController(
     /// <returns>200 OK with all Applications.</returns>
     /// <response code="200">Responds with all Applications, or an empty list if no Applications exist.</response>
     /// <response code="500">Responds with problem details if an unexpected error occurred.</response>
+    /// <response code="503">Responds with problem details and a Retry-After header if the database cannot be reached.</response>
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<GetAllApplicationsResponse>>(StatusCodes.Status200OK, "application/json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json")]
     public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
         var applications = await getAllApplicationsService.ExecuteAsync(cancellationToken);
@@ -130,10 +136,12 @@ public sealed class ApplicationsController(
     /// <response code="200">Responds with the Application matching the given Id.</response>
     /// <response code="404">Responds with problem details if no Application with the given Id exists.</response>
     /// <response code="500">Responds with problem details if an unexpected error occurred.</response>
+    /// <response code="503">Responds with problem details and a Retry-After header if the database cannot be reached.</response>
     [HttpGet("{id:guid}")]
     [ProducesResponseType<GetApplicationResponse>(StatusCodes.Status200OK, "application/json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json")]
     public async Task<IActionResult> Get(
         Guid id,
         CancellationToken cancellationToken)
@@ -164,6 +172,7 @@ public sealed class ApplicationsController(
     /// <response code="409">Responds with problem details if another Application already has the Name.</response>
     /// <response code="415">Responds with problem details if the request body is not JSON.</response>
     /// <response code="500">Responds with problem details if an unexpected error occurred.</response>
+    /// <response code="503">Responds with problem details and a Retry-After header if the database cannot be reached.</response>
     [HttpPut("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
@@ -171,6 +180,7 @@ public sealed class ApplicationsController(
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status415UnsupportedMediaType, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json")]
     public async Task<IActionResult> Rename(
         Guid id,
         RenameApplicationRequest request,
@@ -198,6 +208,7 @@ public sealed class ApplicationsController(
     /// <response code="404">Responds with problem details if no Application with the given Id exists.</response>
     /// <response code="415">Responds with problem details if a request body is sent that is not JSON.</response>
     /// <response code="500">Responds with problem details if an unexpected error occurred.</response>
+    /// <response code="503">Responds with problem details and a Retry-After header if the database cannot be reached.</response>
     [HttpPost("{id:guid}/api-keys")]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     [ProducesResponseType<IssuedApiKeyResponse>(StatusCodes.Status201Created, "application/json")]
@@ -205,6 +216,7 @@ public sealed class ApplicationsController(
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status415UnsupportedMediaType, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json")]
     public async Task<IActionResult> IssueApiKey(
         Guid id,
         [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] IssueApiKeyRequest? request,
@@ -232,10 +244,12 @@ public sealed class ApplicationsController(
     /// <response code="204">Responds with no content once the API Key was revoked.</response>
     /// <response code="404">Responds with problem details if no Application or no API Key with the given Id exists.</response>
     /// <response code="500">Responds with problem details if an unexpected error occurred.</response>
+    /// <response code="503">Responds with problem details and a Retry-After header if the database cannot be reached.</response>
     [HttpPost("{id:guid}/api-keys/{apiKeyId:guid}/revoke")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json")]
     public async Task<IActionResult> RevokeApiKey(
         Guid id,
         Guid apiKeyId,

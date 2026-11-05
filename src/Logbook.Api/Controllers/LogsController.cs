@@ -60,11 +60,13 @@ public sealed class LogsController(
     /// <response code="200">Responds with the Log Events on the page and the cursor to the next page.</response>
     /// <response code="400">Responds with problem details if a parameter is not valid, e.g. an unknown level, a cursor that was not returned by Logbook, or an empty time range.</response>
     /// <response code="500">Responds with problem details if an unexpected error occurred.</response>
+    /// <response code="503">Responds with problem details and a Retry-After header if the database cannot be reached.</response>
     [HttpGet]
     [Authorize(AuthorizationPolicies.AdminApi)]
     [ProducesResponseType<SearchLogEventsResponse>(StatusCodes.Status200OK, "application/json")]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json")]
     public async Task<IActionResult> Search(
         [FromQuery] DateTimeOffset? from = null,
         [FromQuery] DateTimeOffset? to = null,
@@ -97,7 +99,7 @@ public sealed class LogsController(
     /// <response code="415">Responds with problem details if the body is not JSON or the content encoding is not gzip.</response>
     /// <response code="429">Responds with problem details and a Retry-After header if the API Key sends too many requests. None of the Log Events were accepted, so the batch can be sent again.</response>
     /// <response code="500">Responds with problem details if an unexpected error occurred.</response>
-    /// <response code="503">Responds with problem details and a Retry-After header if the queue is full. None of the Log Events were accepted, so the batch can be sent again.</response>
+    /// <response code="503">Responds with problem details and a Retry-After header if the queue is full or the database cannot be reached to check the API Key. None of the Log Events were accepted, so the batch can be sent again.</response>
     [HttpPost]
     [Authorize(AuthorizationPolicies.ApplicationApiKey)]
     [EnableRateLimiting(RateLimitPolicies.ApiKey)]

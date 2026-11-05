@@ -44,6 +44,9 @@ public sealed class LogEvent
     /// </summary>
     public const int MessageMaxLength = 64 * 1024;
 
+    // Roughly the object itself, the headers of its strings, and its place in the queue.
+    private const long MemoryOverheadBytes = 512;
+
     /// <summary>
     ///     Used by EF Core to materialize a Log Event from the database.
     /// </summary>
@@ -187,6 +190,25 @@ public sealed class LogEvent
             + (long)Encoding.UTF8.GetByteCount(MessageTemplate ?? string.Empty)
             + Encoding.UTF8.GetByteCount(Exception ?? string.Empty)
             + Encoding.UTF8.GetByteCount(Properties ?? string.Empty);
+    }
+
+    /// <summary>
+    ///     Estimates the memory the Log Event holds while it waits in the queue. Unlike the size on the wire, a string
+    ///     takes two bytes for each character, so text mostly in ASCII takes about twice as much.
+    /// </summary>
+    /// <returns>The estimated size in bytes.</returns>
+    public long GetMemoryBytes()
+    {
+        var characters = (long)Message.Length
+            + (MessageTemplate?.Length ?? 0)
+            + (Category?.Length ?? 0)
+            + Environment.Length
+            + (Exception?.Length ?? 0)
+            + (TraceId?.Length ?? 0)
+            + (SpanId?.Length ?? 0)
+            + (Properties?.Length ?? 0);
+
+        return (characters * sizeof(char)) + MemoryOverheadBytes;
     }
 
     private static string? NormalizeOptionalText(string? value, int maxLength, string paramName)

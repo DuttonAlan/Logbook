@@ -61,7 +61,7 @@ public sealed class ApiKeyAuthenticationHandler(
 
         var ipAddress = Context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
-        if (invalidApiKeyLimiter.IsOverLimit(ipAddress, out var retryAfter))
+        if (!invalidApiKeyLimiter.TryReserve(ipAddress, out var retryAfter))
         {
             rateLimitReporter.TooManyInvalidApiKeys(ipAddress);
             Context.Items[RetryAfterItem] = retryAfter;
@@ -69,12 +69,25 @@ public sealed class ApiKeyAuthenticationHandler(
             return AuthenticateResult.Fail("Too many API Keys that are not valid.");
         }
 
-        var apiKey = await authenticateApiKeyService.ExecuteAsync(key, Context.RequestAborted);
+        AuthenticatedApiKey? apiKey = null;
+        var lookupCompleted = false;
+
+        try
+        {
+            apiKey = await authenticateApiKeyService.ExecuteAsync(key, Context.RequestAborted);
+            lookupCompleted = true;
+        }
+        finally
+        {
+            // Only a key found not to be valid uses up the limit, not a valid one or a failed lookup.
+            if (!lookupCompleted || apiKey is not null)
+            {
+                invalidApiKeyLimiter.Release(ipAddress);
+            }
+        }
 
         if (apiKey is null)
         {
-            invalidApiKeyLimiter.RecordFailure(ipAddress);
-
             return AuthenticateResult.Fail("The API Key is not active.");
         }
 

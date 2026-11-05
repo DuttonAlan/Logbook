@@ -595,6 +595,20 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
         Assert.Contains(search.Parameters!, parameter => parameter.Name == "level");
     }
 
+    [Fact]
+    public void OpenApiDocument_Documents503_OnEveryOperationThatUsesTheDatabase()
+    {
+        var provider = factory.Services.GetRequiredService<Swashbuckle.AspNetCore.Swagger.ISwaggerProvider>();
+
+        var operations = provider.GetSwagger("v1").Paths
+            .Where(path => path.Key.StartsWith("/api/", StringComparison.Ordinal))
+            .SelectMany(path => path.Value.Operations!.Select(operation => (Name: $"{operation.Key} {path.Key}", operation.Value)))
+            .ToList();
+
+        Assert.NotEmpty(operations);
+        Assert.All(operations, operation => Assert.True(operation.Value.Responses!.ContainsKey("503"), operation.Name));
+    }
+
     private static string PartitionOf(DateTimeOffset timestamp) => $"telemetry.log_events_{timestamp.UtcDateTime:yyyyMMdd}";
 
     private HttpClient CreateClientWithRequestLimit(long maxBytes)

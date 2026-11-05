@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 // See the LICENSE file in the project root for license information.
 
+using System.Text.Json;
+
 using Logbook.Core.Abstractions;
 using Logbook.Core.Application.LogEvents;
 using Logbook.Core.Application.LogEvents.Search;
@@ -9,7 +11,6 @@ using Logbook.Core.Domain.Entities;
 using Logbook.Infrastructure.Ingestion;
 
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -33,8 +34,8 @@ public sealed class LogEventWriterTests
     [Fact]
     public void Queue_RejectsAWholeBatchWhenFull_AndHasRoomAgainAfterRelease()
     {
-        var queue = CreateQueue(maxQueuedBytes: 3000);
         var first = Events(2);
+        var queue = CreateQueue(maxQueuedBytes: first.Sum(logEvent => logEvent.GetMemoryBytes()) + 1);
 
         Assert.True(queue.TryEnqueue(first));
         Assert.False(queue.TryEnqueue(Events(2)));
@@ -43,6 +44,24 @@ public sealed class LogEventWriterTests
         queue.Release(first);
 
         Assert.True(queue.TryEnqueue(Events(2)));
+    }
+
+    [Fact]
+    public void Queue_ChargesTheMemoryOfStrings_NotTheirSizeOnTheWire()
+    {
+        // 100,000 ASCII characters are 100 KB on the wire, but 200 KB as a string.
+        var message = LogEvent.Create(Guid.NewGuid(), DateTime.UtcNow, LogEventLevel.Error, new string('x', LogEvent.MessageMaxLength));
+        var properties = JsonDocument.Parse($$"""{ "text": "{{new string('x', 100_000)}}" }""").RootElement;
+        var withProperties = LogEvent.Create(Guid.NewGuid(), DateTime.UtcNow, LogEventLevel.Error, string.Empty, properties: properties);
+
+        Assert.True(message.GetMemoryBytes() >= 2 * message.GetContentBytes());
+        Assert.True(withProperties.GetMemoryBytes() >= 2 * withProperties.GetContentBytes());
+
+        // A limit between the wire size and the memory of one Log Event already rejects a second one.
+        var queue = CreateQueue(maxQueuedBytes: 150_000);
+
+        Assert.True(queue.TryEnqueue([withProperties]));
+        Assert.False(queue.TryEnqueue(Events(1)));
     }
 
     [Fact]
@@ -148,13 +167,45 @@ public sealed class LogEventWriterTests
         _repository.FailuresBeforeSuccess = int.MaxValue;
 
         var queue = CreateQueue();
-        using var service = CreateService(queue, shutdownTimeout: TimeSpan.FromSeconds(1));
+        using var service = CreateService(queue);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(1));
 
         await service.StartAsync(TestContext.Current.CancellationToken);
         queue.TryEnqueue(Events(5));
-        await service.StopAsync(TestContext.Current.CancellationToken);
+        await service.StopAsync(deadline.Token);
 
         Assert.Contains("5 Log Events", Assert.Single(_serviceLog.Messages), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Service_OnShutdown_WithAWriteThatHangs_LogsTheLossBeforeStopping()
+    {
+        // The host gives this service whatever is left of its timeout, which the web server may have used up.
+        _repository.HangUntilCancelled = true;
+
+        var queue = CreateQueue();
+        using var service = CreateService(queue);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        queue.TryEnqueue(Events(3));
+        await service.StopAsync(deadline.Token);
+
+        // Checked right after stopping, because the process can end at this point.
+        Assert.Contains("3 Log Events", Assert.Single(_serviceLog.Messages), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Service_OnShutdown_WithNoTimeLeft_StillLogsTheLoss()
+    {
+        var queue = CreateQueue();
+        using var service = CreateService(queue, writeInterval: TimeSpan.FromHours(1));
+
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        queue.TryEnqueue(Events(2));
+        await service.StopAsync(new CancellationToken(canceled: true));
+
+        Assert.Contains("2 Log Events", Assert.Single(_serviceLog.Messages), StringComparison.Ordinal);
     }
 
     private static LogEventQueue CreateQueue(long maxQueuedBytes = 1024 * 1024)
@@ -181,14 +232,12 @@ public sealed class LogEventWriterTests
     private LogEventWriterService CreateService(
         LogEventQueue queue,
         int batchSize = 100,
-        TimeSpan? writeInterval = null,
-        TimeSpan? shutdownTimeout = null)
+        TimeSpan? writeInterval = null)
     {
         return new LogEventWriterService(
             queue,
             CreateWriter(),
             Options.Create(new LogIngestionOptions { WriteBatchSize = batchSize, WriteInterval = writeInterval ?? TimeSpan.FromMilliseconds(10) }),
-            Options.Create(new HostOptions { ShutdownTimeout = shutdownTimeout ?? TimeSpan.FromSeconds(30) }),
             TimeProvider.System,
             _serviceLog);
     }
@@ -209,6 +258,8 @@ public sealed class LogEventWriterTests
 
     private sealed class FakeRepository : ILogEventRepository
     {
+        public bool HangUntilCancelled { get; set; }
+
         public int FailuresBeforeSuccess { get; set; }
 
         public string FailureSqlState { get; set; } = PostgresErrorCodes.CannotConnectNow;
@@ -219,8 +270,16 @@ public sealed class LogEventWriterTests
 
         public List<int> BatchSizes { get; } = [];
 
-        public Task AddRange(IReadOnlyCollection<LogEvent> logEvents, CancellationToken cancellationToken = default)
+        public async Task AddRange(IReadOnlyCollection<LogEvent> logEvents, CancellationToken cancellationToken = default)
         {
+            // Like the real repository, whose database calls fail on a cancelled token.
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (HangUntilCancelled)
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+
             if (FailuresBeforeSuccess > 0)
             {
                 FailuresBeforeSuccess--;
@@ -235,8 +294,6 @@ public sealed class LogEventWriterTests
 
             BatchSizes.Add(logEvents.Count);
             Stored.AddRange(logEvents);
-
-            return Task.CompletedTask;
         }
 
         public Task<IReadOnlyList<LogEvent>> Search(LogEventFilter filter, LogEventCursor? after, int take, CancellationToken cancellationToken = default)

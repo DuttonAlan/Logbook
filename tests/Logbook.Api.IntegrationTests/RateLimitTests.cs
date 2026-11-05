@@ -165,41 +165,101 @@ public sealed class RateLimitTests(LogbookApiFactory factory) : IClassFixture<Lo
 
         for (var i = 0; i < 60; i++)
         {
-            Assert.False(limiter.IsOverLimit("192.0.2.1", out _));
-            limiter.RecordFailure("192.0.2.1");
+            Assert.True(limiter.TryReserve("192.0.2.1", out _));
         }
 
-        Assert.True(limiter.IsOverLimit("192.0.2.1", out var retryAfter));
+        Assert.False(limiter.TryReserve("192.0.2.1", out var retryAfter));
         Assert.Equal(TimeSpan.FromSeconds(1), retryAfter);
 
         // Half a token: more than nothing, but not enough for another try.
         clock.Advance(TimeSpan.FromMilliseconds(500));
-        Assert.True(limiter.IsOverLimit("192.0.2.1", out retryAfter));
+        Assert.False(limiter.TryReserve("192.0.2.1", out retryAfter));
         Assert.Equal(TimeSpan.FromMilliseconds(500), retryAfter);
 
         clock.Advance(TimeSpan.FromMilliseconds(500));
-        Assert.False(limiter.IsOverLimit("192.0.2.1", out _));
-
-        limiter.RecordFailure("192.0.2.1");
-        Assert.True(limiter.IsOverLimit("192.0.2.1", out _));
+        Assert.True(limiter.TryReserve("192.0.2.1", out _));
+        Assert.False(limiter.TryReserve("192.0.2.1", out _));
     }
 
     [Fact]
-    public void InvalidApiKeyLimiter_KeepsAddressesApart_AndCheckingUsesUpNothing()
+    public void InvalidApiKeyLimiter_ReleasedTokens_AreNotUsedUp_AndAddressesStayApart()
     {
         var limiter = new InvalidApiKeyLimiter(Options.Create(new RateLimitOptions { InvalidApiKeyPermitsPerMinute = 2 }), new ManualTimeProvider());
 
-        limiter.RecordFailure("192.0.2.1");
-
         for (var i = 0; i < 10; i++)
         {
-            Assert.False(limiter.IsOverLimit("192.0.2.1", out _));
+            Assert.True(limiter.TryReserve("192.0.2.1", out _));
+            limiter.Release("192.0.2.1");
         }
 
-        limiter.RecordFailure("192.0.2.1");
+        Assert.True(limiter.TryReserve("192.0.2.1", out _));
+        Assert.True(limiter.TryReserve("192.0.2.1", out _));
+        Assert.False(limiter.TryReserve("192.0.2.1", out _));
+        Assert.True(limiter.TryReserve("2001:db8::1", out _));
 
-        Assert.True(limiter.IsOverLimit("192.0.2.1", out _));
-        Assert.False(limiter.IsOverLimit("2001:db8::1", out _));
+        // Releasing never holds more than the limit.
+        limiter.Release("2001:db8::1");
+        limiter.Release("2001:db8::1");
+        limiter.Release("2001:db8::1");
+        Assert.True(limiter.TryReserve("2001:db8::1", out _));
+        Assert.True(limiter.TryReserve("2001:db8::1", out _));
+        Assert.False(limiter.TryReserve("2001:db8::1", out _));
+    }
+
+    [Fact]
+    public async Task ParallelInvalidApiKeys_CannotPassTheLimit_BeforeTheFirstLookupEnds()
+    {
+        await using var limited = factory.WithWebHostBuilder(builder => builder.UseSetting("RateLimiting:InvalidApiKeyPermitsPerMinute", "2"));
+        using var client = CreateSender(limited, "not-a-valid-key");
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 20).Select(_ => SendAsync(client, "x")));
+
+        Assert.Equal(2, results.Count(status => status == HttpStatusCode.Unauthorized));
+        Assert.Equal(18, results.Count(status => status == HttpStatusCode.TooManyRequests));
+    }
+
+    [Fact]
+    public async Task Refill_KeepsTheConfiguredRate_WhenTheLimitIsNotDivisibleBy60()
+    {
+        // 61 per minute is about one per second. Rounding up per second would allow two per second.
+        await using var limited = WithLimit(61);
+        var application = await CreateApplicationAsync();
+        using var client = CreateSender(limited, application.ApiKey.Key);
+
+        while (await SendAsync(client, "burst") == HttpStatusCode.Accepted)
+        {
+        }
+
+        var accepted = 0;
+        var started = TimeProvider.System.GetTimestamp();
+
+        while (TimeProvider.System.GetElapsedTime(started) < TimeSpan.FromSeconds(3))
+        {
+            if (await SendAsync(client, "after") == HttpStatusCode.Accepted)
+            {
+                accepted++;
+            }
+
+            await Task.Delay(20, TestContext.Current.CancellationToken);
+        }
+
+        Assert.InRange(accepted, 1, 4);
+    }
+
+    [Fact]
+    public async Task OverTheLimit_RetryAfter_IsTheTimeForOneRequest_NotAWholeMinute()
+    {
+        var application = await CreateApplicationAsync();
+        await using var two = WithLimit(2);
+        using var slow = CreateSender(two, application.ApiKey.Key);
+
+        await SendAsync(slow, "a");
+        await SendAsync(slow, "b");
+
+        using var content = LogEventBodies.Json(Body("c"));
+        using var response = await slow.PostAsync(Endpoint, content, TestContext.Current.CancellationToken);
+
+        Assert.Equal(TimeSpan.FromSeconds(30), response.Headers.RetryAfter?.Delta);
     }
 
     [Fact]

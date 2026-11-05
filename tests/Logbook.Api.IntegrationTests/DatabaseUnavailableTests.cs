@@ -43,6 +43,22 @@ public sealed class DatabaseUnavailableTests(LogbookApiFactory factory) : IClass
         await AssertServiceUnavailableAsync(response);
     }
 
+    [Fact]
+    public async Task FailedLookups_DoNotCountAsInvalidApiKeys()
+    {
+        using var unavailable = Unavailable.WithWebHostBuilder(builder => builder.UseSetting("RateLimiting:InvalidApiKeyPermitsPerMinute", "1"));
+        using var client = unavailable.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Logbook-Key", "any-key");
+
+        for (var i = 0; i < 3; i++)
+        {
+            using var content = LogEventBodies.Json(LogEventBodies.Valid());
+            using var response = await client.PostAsync("/api/v1/logs", content, TestContext.Current.CancellationToken);
+
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        }
+    }
+
     private static async Task AssertServiceUnavailableAsync(HttpResponseMessage response)
     {
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);

@@ -56,14 +56,12 @@ internal static class RateLimitPolicies
     /// </summary>
     private static TokenBucketRateLimiterOptions CreateBucket(int permitsPerMinute)
     {
-        // Refills at least every second. A limit below 60 per minute cannot refill a whole token that often.
-        var period = TimeSpan.FromSeconds(Math.Max(1, 60.0 / permitsPerMinute));
-
+        // Partitioned buckets refill in fractions from their rate, so this is the exact limit, without waiting a minute.
         return new TokenBucketRateLimiterOptions
         {
             TokenLimit = permitsPerMinute,
-            ReplenishmentPeriod = period,
-            TokensPerPeriod = (int)Math.Ceiling(permitsPerMinute * period.TotalMinutes),
+            ReplenishmentPeriod = TimeSpan.FromMinutes(1),
+            TokensPerPeriod = permitsPerMinute,
             QueueLimit = 0
         };
     }
@@ -104,9 +102,12 @@ internal static class RateLimitPolicies
             .GetRequiredService<RateLimitReporter>()
             .ApiKeyOverLimit(httpContext.User.FindFirstValue(ApiKeyClaimTypes.ApiKeyId)!);
 
+        // The time for one token. The lease would report the whole replenishment period of a minute.
+        var permitsPerMinute = httpContext.RequestServices.GetRequiredService<IOptions<RateLimitOptions>>().Value.ApiKeyPermitsPerMinute;
+
         await WriteTooManyRequestsAsync(
             httpContext,
-            context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter) ? retryAfter : null,
+            TimeSpan.FromMinutes(1.0 / permitsPerMinute),
             "This API Key sends too many requests. Send them again later.");
     }
 }

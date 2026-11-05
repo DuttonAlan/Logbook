@@ -103,7 +103,7 @@ Each API Key can send 6000 requests per minute, set with [`RateLimiting:ApiKeyPe
 - Searching is not limited.
 - A rejected API Key is logged as a warning with its Id, at most once per minute.
 
-Invalid API Keys have a separate limit, because each one costs a lookup in the database: 600 per minute for each IP address, set with [`RateLimiting:InvalidApiKeyPermitsPerMinute`](configuration.md#server). Valid API Keys do not count against it. Above the limit, **all** requests with an API Key from that IP address get `429` until the allowance refills, because an API Key cannot be checked without the lookup. Behind a reverse proxy, all clients share the address of the proxy until forwarded headers are supported (milestone M4), so one client flooding Logbook with invalid API Keys would also block the others. The IP address is logged as a warning, at most once per minute.
+Invalid API Keys have a separate limit, because each one costs a lookup in the database: 600 per minute for each IP address, set with [`RateLimiting:InvalidApiKeyPermitsPerMinute`](configuration.md#server). Valid API Keys do not use it up, but each one holds a place in it while it is being checked, so parallel requests cannot pass the limit together. Above the limit, **all** requests with an API Key from that IP address get `429` until the allowance refills, because an API Key cannot be checked without the lookup. Behind a reverse proxy, all clients share the address of the proxy until forwarded headers are supported (milestone M4), so one client flooding Logbook with invalid API Keys would also block the others. The IP address is logged as a warning, at most once per minute.
 
 ### Example
 
