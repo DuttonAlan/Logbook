@@ -8,6 +8,10 @@ Logbook is configured like any ASP.NET Core application: through `appsettings.js
 |---|---|---|
 | `ConnectionStrings:Database` | – (required) | Npgsql connection string of the PostgreSQL database, e.g. `Host=db;Database=logbook;Username=logbook;Password=…`. Logbook refuses to start without it. |
 | `AdminApi:Key` | – (required) | The key that gives full access to the [admin API](admin-api.md). At least 32 characters without whitespace, e.g. from `openssl rand -base64 32`. Logbook refuses to start without it. Replaced by sign-in in milestone M4. |
+| `LogIngestion:MaxRequestBytes` | `5242880` (5 MiB) | Maximum size of a request to the [log API](log-api.md), before and after decompression. Must be greater than 0. |
+| `LogIngestion:MaxEventBytes` | `262144` (256 KiB) | Maximum size of the message, message template, exception and properties of one Log Event together. Must be greater than 0 and at most `MaxRequestBytes`. |
+| `LogIngestion:MaxEventAge` | `7.00:00:00` | How far in the past the timestamp of a Log Event may be. Greater than 0 and at most 3650 days. Each day in the accepted window can become a table in the database. |
+| `LogIngestion:MaxFutureOffset` | `1.00:00:00` | How far in the future the timestamp of a Log Event may be, to tolerate wrong clocks. From 0 to 3650 days. |
 | `AllowedHosts` | `*` | Host names the server answers to, separated by `;`. Set it to your domain in production. |
 | `ASPNETCORE_HTTP_PORTS` | `8080` in the container image | Port for plain HTTP, for a TLS-terminating reverse proxy. |
 | `ASPNETCORE_ENVIRONMENT` | `Production` | `Development` enables Swagger UI at `/swagger` and the settings of `appsettings.Development.json`. Never use it outside your computer. |

@@ -19,6 +19,11 @@ internal static class AuthorizationPolicies
     public const string AdminApi = "admin-api";
 
     /// <summary>
+    ///     Requires the API Key of an Application. Every controller that Applications send to requires this policy.
+    /// </summary>
+    public const string ApplicationApiKey = "application-api-key";
+
+    /// <summary>
     ///     Registers the policies.
     /// </summary>
     /// <param name="options">The authorization options.</param>
@@ -28,6 +33,10 @@ internal static class AuthorizationPolicies
 
         options.AddPolicy(AdminApi, policy => policy
             .AddAuthenticationSchemes(AdminKeyAuthenticationHandler.SchemeName)
+            .RequireAuthenticatedUser());
+
+        options.AddPolicy(ApplicationApiKey, policy => policy
+            .AddAuthenticationSchemes(ApiKeyAuthenticationHandler.SchemeName)
             .RequireAuthenticatedUser());
     }
 }

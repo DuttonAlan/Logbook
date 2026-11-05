@@ -40,6 +40,14 @@ An API Key is a 256-bit random value. Logbook shows it once when it is issued an
 
 The admin API that manages them is protected by a single key from the configuration, sent as a Bearer token. It is deliberately simple, because it only has to hold until sign-in arrives in milestone M4. Logbook refuses to start without it, so an unprotected admin API cannot happen by accident. The key is separate from API Keys in both directions: an API Key can never manage Logbook.
 
+## Receiving Log Events
+
+An application sends its Log Events in batches to `POST /api/v1/logs`, with its API Key in the header `X-Logbook-Key`. The Application of a Log Event always comes from the API Key, never from the body, so one Application cannot write into another. The Environment does come from the body: it is a label for filtering, so a Log Event without one is kept and stored as `Unknown` rather than lost.
+
+The API Key is checked before the body is read, so a request without a valid key costs almost nothing. The size limit is checked while reading, also after decompression, because neither a chunked request nor a small gzip body that expands to gigabytes announces its real size.
+
+A batch is accepted or rejected as a whole, which keeps the answer to the sender simple: `202`, or an error that a retry will not fix. That only works if ordinary logs do not get rejected, so values that PostgreSQL cannot store but a log line can contain, such as the character U+0000, are replaced instead of failing the batch.
+
 ## The web interface
 
 `src/Logbook.Web` is a React application written in TypeScript and built with Vite. When the container image is built, its output is copied into the server's `wwwroot`, so one container serves the API and the interface from the same origin: no CORS, one address to secure. Every path that is not an API route or a file returns `index.html`, so the interface handles its own routes in the browser.
@@ -69,6 +77,10 @@ PostgreSQL holds all state, in two schemas:
 | `config` | Applications, API Key hashes, retention settings and, later, alert rules. Small, kept, backed up. |
 | `telemetry` | Log Events and, later, requests and dependencies. Large, written constantly, expires. |
 
-The split follows how the data is used. Log Events are stored in tables **partitioned by day**, so retention drops whole partitions instead of deleting rows, which is fast and leaves no bloat. Their properties are stored as `jsonb` with a GIN index, so you can search by any property your application logs.
+The split follows how the data is used. Log Events are stored in tables **partitioned by day** in UTC, so retention drops whole partitions instead of deleting rows, which is fast and leaves no bloat. Their properties are stored as `jsonb` with a GIN index, so you can search by any property your application logs.
+
+Log Events have no foreign key to their Application. It would be checked for every inserted row, and deleting an Application would have to search every partition. So deleting an Application leaves its Log Events in place, until retention (milestone M4) removes them.
 
 Logbook never changes its schema at startup. Migrations are a separate, explicit step (the `migrator` container image or `dotnet ef database update`), so a deployment never alters the database by accident and the application user needs no rights to change the schema.
+
+Partitions are the one thing that has to appear while Logbook runs, because new days keep coming. A database function created by the migrations makes the partition for a day when the first Log Event of that day arrives. It runs with the rights of the user that applied the migrations, so the application user only needs to be allowed to call it. The application user does need `USAGE` on the schema `telemetry` and `SELECT` and `INSERT` on `telemetry.log_events`. Only days inside the accepted time window of a Log Event get a partition, so a sender cannot create an unlimited number of tables.

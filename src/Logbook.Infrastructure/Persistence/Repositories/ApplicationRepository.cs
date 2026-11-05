@@ -4,6 +4,7 @@
 
 using Logbook.Core.Abstractions;
 using Logbook.Core.Domain.Entities;
+using Logbook.Core.Domain.ValueObjects;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -26,6 +27,14 @@ public sealed class ApplicationRepository(LogbookContext context) : IApplication
         return await context.Applications
             .Include(application => application.ApiKeys)
             .FirstOrDefaultAsync(application => application.Id == id, cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task<ApiKey?> GetApiKeyByHash(ApiKeyHash keyHash, CancellationToken cancellationToken = default)
+    {
+        return await context.Set<ApiKey>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(apiKey => apiKey.KeyHash == keyHash, cancellationToken);
     }
 
     /// <inheritdoc/>

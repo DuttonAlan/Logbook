@@ -2,19 +2,23 @@
 // Licensed under the MIT License.
 // See the LICENSE file in the project root for license information.
 
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using Logbook.Api.Authentication;
 using Logbook.Api.Authorization;
 using Logbook.Api.ExceptionHandling;
 using Logbook.Api.HealthChecks;
+using Logbook.Api.LogEvents;
 using Logbook.Api.OpenApi;
 using Logbook.Core;
+using Logbook.Core.Application.LogEvents;
 using Logbook.Infrastructure;
 using Logbook.Infrastructure.HealthChecks;
 
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
@@ -39,11 +43,20 @@ builder.Services.AddSwaggerGen(options =>
         Scheme = "bearer",
         Description = "The admin key from the setting `AdminApi:Key`."
     });
+    options.AddSecurityDefinition(AuthorizeOperationFilter.ApiKeySecuritySchemeName, new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.ApiKey,
+        In = ParameterLocation.Header,
+        Name = ApiKeyAuthenticationHandler.HeaderName,
+        Description = "The API Key of an Application."
+    });
     options.OperationFilter<AuthorizeOperationFilter>();
 });
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ProblemDetailsExceptionHandler>();
-builder.Services.AddControllers()
+builder.Services.AddControllers(options =>
+        // Free-form JSON of a Log Event has nothing to validate, and walking through it would only cost time.
+        options.ModelMetadataDetailsProviders.Add(new SuppressChildValidationMetadataProvider(typeof(JsonElement))))
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 builder.Services.AddOptions<AdminApiOptions>()
@@ -53,8 +66,15 @@ builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<A
 
 // The admin API is protected by a single configured key until sign-in exists (milestone M4).
 builder.Services.AddAuthentication(AdminKeyAuthenticationHandler.SchemeName)
-    .AddScheme<AuthenticationSchemeOptions, AdminKeyAuthenticationHandler>(AdminKeyAuthenticationHandler.SchemeName, configureOptions: null);
+    .AddScheme<AuthenticationSchemeOptions, AdminKeyAuthenticationHandler>(AdminKeyAuthenticationHandler.SchemeName, configureOptions: null)
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationHandler.SchemeName, configureOptions: null);
 builder.Services.AddAuthorization(options => options.AddLogbookPolicies());
+
+builder.Services.AddOptions<LogIngestionOptions>()
+    .Bind(builder.Configuration.GetSection(LogIngestionOptions.SectionName))
+    .ValidateOnStart();
+builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<LogIngestionOptions>, LogIngestionOptionsValidator>());
+builder.Services.AddSingleton<LogRequestBodyFilter>();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);

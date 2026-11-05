@@ -4,6 +4,8 @@
 
 using System.Globalization;
 
+using Logbook.Api.Authorization;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.OpenApi;
 
@@ -12,15 +14,20 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 namespace Logbook.Api.OpenApi;
 
 /// <summary>
-///     Adds the Bearer security requirement and the 401 response to every operation that requires authorization, so
-///     they do not have to be repeated on every action.
+///     Adds the security requirement of its policy and the 401 response to every operation that requires authorization,
+///     so they do not have to be repeated on every action.
 /// </summary>
 public sealed class AuthorizeOperationFilter : IOperationFilter
 {
     /// <summary>
-    ///     Name of the security scheme in the OpenAPI document.
+    ///     Name of the security scheme for the admin key in the OpenAPI document.
     /// </summary>
     public const string SecuritySchemeName = "Bearer";
+
+    /// <summary>
+    ///     Name of the security scheme for the API Key of an Application in the OpenAPI document.
+    /// </summary>
+    public const string ApiKeySecuritySchemeName = "ApiKey";
 
     /// <inheritdoc/>
     public void Apply(OpenApiOperation operation, OperationFilterContext context)
@@ -29,21 +36,26 @@ public sealed class AuthorizeOperationFilter : IOperationFilter
         ArgumentNullException.ThrowIfNull(context);
 
         var metadata = context.ApiDescription.ActionDescriptor.EndpointMetadata;
+        var authorize = metadata.OfType<IAuthorizeData>().FirstOrDefault();
 
-        if (!metadata.OfType<IAuthorizeData>().Any() || metadata.OfType<IAllowAnonymous>().Any())
+        if (authorize is null || metadata.OfType<IAllowAnonymous>().Any())
         {
             return;
         }
 
+        var (schemeName, description) = authorize.Policy == AuthorizationPolicies.ApplicationApiKey
+            ? (ApiKeySecuritySchemeName, "The API Key is missing, unknown, revoked or expired.")
+            : (SecuritySchemeName, "The admin key is missing or not valid.");
+
         operation.Responses ??= [];
         operation.Responses.TryAdd(
             StatusCodes.Status401Unauthorized.ToString(CultureInfo.InvariantCulture),
-            new OpenApiResponse { Description = "The admin key is missing or not valid." });
+            new OpenApiResponse { Description = description });
 
         operation.Security ??= [];
         operation.Security.Add(new OpenApiSecurityRequirement
         {
-            [new OpenApiSecuritySchemeReference(SecuritySchemeName, context.Document)] = []
+            [new OpenApiSecuritySchemeReference(schemeName, context.Document)] = []
         });
     }
 }

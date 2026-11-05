@@ -2,6 +2,9 @@
 // Licensed under the MIT License.
 // See the LICENSE file in the project root for license information.
 
+using Logbook.Core.Domain.Entities;
+using Logbook.Core.Domain.ValueObjects;
+
 namespace Logbook.Core.Abstractions;
 
 /// <summary>
@@ -30,6 +33,14 @@ public interface IApplicationRepository
     /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
     /// <returns>The tracked Application, or null if the Application does not exist.</returns>
     public Task<Domain.Entities.Application?> GetApplicationById(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Gets an API Key by its hash, to authenticate a request.
+    /// </summary>
+    /// <param name="keyHash">The hash of the API Key.</param>
+    /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
+    /// <returns>The untracked API Key, or null if no API Key has the hash.</returns>
+    public Task<ApiKey?> GetApiKeyByHash(ApiKeyHash keyHash, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Gets all Applications ordered by their Name, without their API Keys.

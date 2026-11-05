@@ -45,6 +45,9 @@ public sealed class ProblemDetailsExceptionHandler(IProblemDetailsService proble
             // ArgumentException is deliberately not mapped for the same reason as InvalidOperationException.
             // Domain and services throw DomainValidationException for invalid input.
             DomainValidationException => (StatusCodes.Status400BadRequest, exception.Message),
+
+            // The request itself was rejected while its body was read, e.g. because it is too large.
+            BadHttpRequestException badRequest => (badRequest.StatusCode, exception.Message),
             _ => (0, null)
         };
 

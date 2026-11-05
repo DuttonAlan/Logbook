@@ -1,0 +1,65 @@
+// Copyright(c) Alan Dutton.
+// Licensed under the MIT License.
+// See the LICENSE file in the project root for license information.
+
+using System.Globalization;
+using System.Security.Claims;
+
+using Logbook.Api.Authentication;
+using Logbook.Api.Authorization;
+using Logbook.Api.LogEvents;
+using Logbook.Core.Application.LogEvents.Ingest;
+
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Logbook.Api.Controllers;
+
+/// <summary>
+///     Provides the Endpoints for the Log Events of Applications.
+/// </summary>
+/// <remarks>
+///     The actions deliberately have no <see cref="ConsumesAttribute"/>: routing would skip an action for another
+///     content type, so the request would end in the catch-all for unknown API routes and return 404 instead of 415.
+/// </remarks>
+/// <param name="ingestLogEventsService">The Service to receive Log Events.</param>
+[ApiController]
+[Route("api/v1/logs")]
+[Tags("Logs")]
+public sealed class LogsController(IngestLogEventsService ingestLogEventsService) : ControllerBase
+{
+    /// <summary>
+    ///     Receives a batch of Log Events from an Application.
+    /// </summary>
+    /// <remarks>
+    ///     The body is a JSON array of Log Events and can be compressed with gzip (<c>Content-Encoding: gzip</c>). The
+    ///     Application is taken from the API Key in the header <c>X-Logbook-Key</c>. If one Log Event is not valid, none
+    ///     are accepted.
+    /// </remarks>
+    /// <param name="logEvents">The Log Events.</param>
+    /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
+    /// <returns>202 Accepted with the number of accepted Log Events.</returns>
+    /// <response code="202">Responds with the number of accepted Log Events.</response>
+    /// <response code="400">Responds with problem details if the body is not valid, e.g. malformed JSON or gzip, an empty batch, or a Log Event that is not valid.</response>
+    /// <response code="413">Responds with problem details if the body is too large, also after decompression.</response>
+    /// <response code="415">Responds with problem details if the body is not JSON or the content encoding is not gzip.</response>
+    /// <response code="500">Responds with problem details if an unexpected error occurred.</response>
+    [HttpPost]
+    [Authorize(AuthorizationPolicies.ApplicationApiKey)]
+    [ServiceFilter<LogRequestBodyFilter>]
+    [ProducesResponseType<IngestLogEventsResponse>(StatusCodes.Status202Accepted, "application/json")]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status415UnsupportedMediaType, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    public async Task<IActionResult> Ingest(
+        [FromBody] IReadOnlyList<LogEventRequest?> logEvents,
+        CancellationToken cancellationToken)
+    {
+        var applicationId = Guid.Parse(User.FindFirstValue(ApiKeyClaimTypes.ApplicationId)!, CultureInfo.InvariantCulture);
+
+        var response = await ingestLogEventsService.ExecuteAsync(applicationId, logEvents, cancellationToken);
+
+        return Accepted(response);
+    }
+}

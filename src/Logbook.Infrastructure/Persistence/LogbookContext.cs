@@ -22,6 +22,11 @@ public sealed class LogbookContext(DbContextOptions<LogbookContext> options) : D
     /// </summary>
     public DbSet<Application> Applications => Set<Application>();
 
+    /// <summary>
+    ///     The Log Events Table, partitioned by day.
+    /// </summary>
+    public DbSet<LogEvent> LogEvents => Set<LogEvent>();
+
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

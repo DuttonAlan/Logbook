@@ -43,6 +43,7 @@ public static class ServiceCollectionExtensions
         serviceCollection.AddDbContext<LogbookContext>(options => options.UseNpgsql(connectionString));
 
         serviceCollection.AddTransient<IApplicationRepository, ApplicationRepository>();
+        serviceCollection.AddTransient<ILogEventRepository, LogEventRepository>();
 
         serviceCollection.AddSingleton<IApiKeyGenerator, ApiKeyGenerator>();
         serviceCollection.AddSingleton<IApiKeyHasher, Sha256ApiKeyHasher>();

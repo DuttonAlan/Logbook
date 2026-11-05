@@ -47,7 +47,7 @@ The unit Logbook stores. The SDK sends Log Events in batches:
 }
 ```
 
-Every Log Event belongs to an **Application**, which the server takes from the API Key, and to an **Environment**, e.g. `Production`, which the SDK sends. The SDK reads it from `IHostEnvironment` unless the options override it, so one API Key can be used in several Environments. The Environment is a filter label, not a security boundary; to isolate a stage, give it its own Application.
+Every Log Event belongs to an **Application**, which the server takes from the API Key, and to an **Environment**, e.g. `Production`, which the SDK sends. The SDK reads it from `IHostEnvironment` unless the options override it, so one API Key can be used in several Environments. A Log Event without an Environment is stored with the Environment `Unknown`. The Environment is a filter label, not a security boundary; to isolate a stage, give it its own Application.
 
 ---
 
@@ -65,10 +65,10 @@ Every Log Event belongs to an **Application**, which the server takes from the A
 ## M1: Log API
 
 - [x] Entities `Application` and `ApiKey` (only the SHA-256 hash is stored), schema `config`
-- [ ] Entity `LogEvent` in schema `telemetry`, partitioned by day; `properties` and `exception` as `jsonb` with a GIN index; full-text search on `message`
+- [x] Entity `LogEvent` in schema `telemetry`, partitioned by day; `properties` and `exception` as `jsonb` with a GIN index; full-text search on `message`
 - [x] Use cases and admin API to create, list, rename and delete Applications, and to issue and revoke API Keys, protected by a single configured admin key until sign-in exists (M4)
-- [ ] `POST /api/v1/logs`: batched JSON, gzip support, size limits per request and per event
-- [ ] API Key authentication with the header `X-Logbook-Key`
+- [x] `POST /api/v1/logs`: batched JSON, gzip support, size limits per request and per event
+- [x] API Key authentication with the header `X-Logbook-Key`
 - [ ] Ingestion queue with batched writes (`COPY` or multi-row inserts) in a background service
 - [ ] `GET /api/v1/logs`: filter by time range, level, Application, Environment and text; cursor paging
 - [ ] Rate limits per API Key

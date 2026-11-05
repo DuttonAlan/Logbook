@@ -3,17 +3,20 @@ using System;
 using Logbook.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Logbook.Infrastructure.Migrations
+namespace Logbook.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(LogbookContext))]
-    partial class LogbookContextModelSnapshot : ModelSnapshot
+    [Migration("20261105062709_AddLogEvents")]
+    partial class AddLogEvents
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -76,6 +79,68 @@ namespace Logbook.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("applications", "config");
+                });
+
+            modelBuilder.Entity("Logbook.Core.Domain.Entities.LogEvent", b =>
+                {
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ApplicationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Environment")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("EventId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Exception")
+                        .HasColumnType("jsonb");
+
+                    b.Property<short>("Level")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("MessageTemplate")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Properties")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("SpanId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("TraceId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Timestamp", "Id");
+
+                    b.HasIndex("Exception");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Exception"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Exception"), new[] { "jsonb_path_ops" });
+
+                    b.HasIndex("Properties");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Properties"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Properties"), new[] { "jsonb_path_ops" });
+
+                    b.ToTable("log_events", "telemetry");
                 });
 
             modelBuilder.Entity("Logbook.Core.Domain.Entities.ApiKey", b =>

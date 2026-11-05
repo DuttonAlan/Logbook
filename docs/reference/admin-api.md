@@ -14,7 +14,7 @@ The admin API manages the Applications that send logs to Logbook and their API K
 | `GET /api/v1/applications` | `200` | List, ordered by name. Returns a plain JSON array of `id`, `name` and `createdAt`. |
 | `GET /api/v1/applications/{id}` | `200` | Details, including the metadata of all API Keys. `404` if unknown. |
 | `PUT /api/v1/applications/{id}` | `204` | Rename, with `name`. API Keys stay valid. `404` if unknown, `409` if the name is taken. |
-| `DELETE /api/v1/applications/{id}` | `204` | Delete, together with its API Keys. Also succeeds if the Application does not exist. |
+| `DELETE /api/v1/applications/{id}` | `204` | Delete, together with its API Keys. Its Log Events are not deleted. Also succeeds if the Application does not exist. |
 
 An Application's `name` has 1 to 100 characters, is trimmed, and must be unique. Names are compared exactly, so `Shop` and `shop` are different names.
 

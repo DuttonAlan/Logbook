@@ -2,7 +2,7 @@
 
 Every program that sends logs to Logbook is an Application, and it authenticates with an API Key. This guide creates an Application, rotates its API Key and removes it again with `curl`. All endpoints and fields are listed in the [admin API reference](../reference/admin-api.md).
 
-> Logbook is at milestone M1: API Keys can be issued, but the endpoint that receives Log Events is still being built; see the [roadmap](../roadmap.md).
+> Logbook is at milestone M1: an API Key can already [send Log Events](../reference/log-api.md), but searching them is still being built; see the [roadmap](../roadmap.md).
 
 ## Prerequisites
 
@@ -72,7 +72,7 @@ curl -X DELETE "$LOGBOOK_URL/api/v1/applications/$APPLICATION_ID" \
   -H "Authorization: Bearer $LOGBOOK_ADMIN_KEY"
 ```
 
-This also deletes its API Keys and cannot be undone.
+This also deletes its API Keys and cannot be undone. Its Log Events are not deleted: they stay in the database, without an Application.
 
 ## Change the admin key
 

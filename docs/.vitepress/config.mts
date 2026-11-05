@@ -79,6 +79,7 @@ export default defineConfig({
         items: [
           { text: 'Configuration', link: '/reference/configuration' },
           { text: 'Admin API', link: '/reference/admin-api' },
+          { text: 'Log API', link: '/reference/log-api' },
           { text: 'Health checks', link: '/reference/health-checks' },
         ],
       },

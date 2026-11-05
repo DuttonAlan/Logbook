@@ -10,6 +10,8 @@ using Logbook.Core.Application.Applications.GetAll;
 using Logbook.Core.Application.Applications.IssueApiKey;
 using Logbook.Core.Application.Applications.Rename;
 using Logbook.Core.Application.Applications.RevokeApiKey;
+using Logbook.Core.Application.LogEvents.AuthenticateApiKey;
+using Logbook.Core.Application.LogEvents.Ingest;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -39,6 +41,9 @@ public static class ServiceCollectionExtensions
         serviceCollection.AddTransient<IssueApiKeyService>();
         serviceCollection.AddTransient<RenameApplicationService>();
         serviceCollection.AddTransient<RevokeApiKeyService>();
+
+        serviceCollection.AddTransient<AuthenticateApiKeyService>();
+        serviceCollection.AddTransient<IngestLogEventsService>();
 
         return serviceCollection;
     }

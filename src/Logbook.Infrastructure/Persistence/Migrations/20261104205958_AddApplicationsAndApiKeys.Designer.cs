@@ -9,7 +9,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Logbook.Infrastructure.Migrations
+namespace Logbook.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(LogbookContext))]
     [Migration("20261104205958_AddApplicationsAndApiKeys")]

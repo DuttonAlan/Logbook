@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Logbook.Infrastructure.Migrations
+namespace Logbook.Infrastructure.Persistence.Migrations
 {
     /// <inheritdoc />
     public partial class AddApplicationsAndApiKeys : Migration
