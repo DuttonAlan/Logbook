@@ -18,6 +18,9 @@ public sealed class LogbookOptions
     /// </summary>
     public const string SectionName = "Logbook";
 
+    // Far above any sensible value, and well within what timers accept.
+    private static readonly TimeSpan MaxFlushInterval = TimeSpan.FromDays(1);
+
     /// <summary>
     ///     Base address of the Logbook server, e.g. <c>https://logbook.example.com</c>.
     /// </summary>
@@ -42,4 +45,37 @@ public sealed class LogbookOptions
     ///     Maximum number of events kept in memory. When the buffer is full, the oldest events are dropped.
     /// </summary>
     public int MaxQueueSize { get; set; } = 10_000;
+
+    /// <summary>
+    ///     Maximum memory the events in the buffer may use, in bytes, counting strings at two bytes per character. When
+    ///     the buffer is full, the oldest events are dropped.
+    /// </summary>
+    /// <remarks>
+    ///     <see cref="MaxQueueSize"/> alone does not protect the host application, because a single event can be hundreds
+    ///     of kilobytes.
+    /// </remarks>
+    public long MaxQueueBytes { get; set; } = 64L * 1024 * 1024;
+
+    /// <summary>
+    ///     Maximum size of the JSON of one request before compression, in bytes. Must not be larger than the setting
+    ///     <c>LogIngestion:MaxRequestBytes</c> of the server, which applies before and after decompression.
+    /// </summary>
+    public int MaxRequestBytes { get; set; } = 5 * 1024 * 1024;
+
+    /// <summary>
+    ///     Checks whether the client can work with these options. It does not throw, because the client must not take
+    ///     the host application down for a wrong setting.
+    /// </summary>
+    /// <returns><see langword="true"/> if all values are usable.</returns>
+    internal bool IsValid()
+    {
+        return Endpoint is { IsAbsoluteUri: true, Scheme: "http" or "https" }
+            && !string.IsNullOrWhiteSpace(ApiKey)
+            && BatchSize > 0
+            && FlushInterval > TimeSpan.Zero
+            && FlushInterval <= MaxFlushInterval
+            && MaxQueueSize > 0
+            && MaxQueueBytes > 0
+            && MaxRequestBytes > 0;
+    }
 }

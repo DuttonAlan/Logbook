@@ -76,7 +76,8 @@ Every Log Event belongs to an **Application**, which the server takes from the A
 
 ## M2: C# SDK
 
-- [ ] `Logbook.Sdk`: bounded `Channel<T>` buffer, background sender, batching by size and time, retries with exponential backoff, drop-oldest when full
+- [x] `Logbook.Sdk`: bounded buffer limited by events and by memory, background sender, batching by size and time, gzip, drop-oldest when full
+- [ ] Retries with exponential backoff and `Retry-After`, size guards with truncation
 - [ ] `Logbook.Extensions.Logging`: `builder.Logging.AddLogbook(…)`, configuration from the section `Logbook`, Environment from `IHostEnvironment` with an override in the options
 - [ ] Message templates, scopes and `EventId` as structured properties
 - [ ] Exceptions with inner and aggregate exceptions

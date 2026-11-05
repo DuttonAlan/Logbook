@@ -63,6 +63,7 @@ sdk/Logbook.AspNetCore        request and dependency tracking
 samples/SampleWebApp          application to try the SDK against a local server
 tests/Logbook.Api.IntegrationTests
 tests/Logbook.Sdk.Tests
+tests/Logbook.Sdk.Tests.NetStandard
 docs/                         documentation (Diátaxis)
 ```
 
@@ -111,7 +112,7 @@ Dependencies of the server point inward only: `Api → Core ← Infrastructure`.
 **Tests**
 
 - `tests/Logbook.Api.IntegrationTests` tests the server through HTTP. `LogbookApiFactory` starts PostgreSQL and the app.
-- `tests/Logbook.Sdk.Tests` tests the SDK without a server.
+- `tests/Logbook.Sdk.Tests` tests the SDK without a server. `tests/Logbook.Sdk.Tests.NetStandard` runs the same tests against its `netstandard2.0` build.
 - Add a test for every bug fix and every new rule.
 
 ## Pull requests

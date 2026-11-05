@@ -27,12 +27,14 @@ The image `logbook-migrator` applies the database migrations and exits. It needs
 
 ## SDK
 
-The SDK is configured through `LogbookOptions`, or the section `Logbook` in `appsettings.json` once the `ILogger` provider exists (milestone M2).
+The SDK is configured through `LogbookOptions`, or the section `Logbook` in `appsettings.json` once the `ILogger` provider exists (milestone M2). The options are read once when the client is created. If `Endpoint` or `ApiKey` is missing or a value cannot be used, the client stays disabled and ignores all events instead of failing the application.
 
 | Setting | Default | Description |
 |---|---|---|
-| `Endpoint` | – | Base address of the Logbook server, e.g. `https://logbook.example.com`. |
+| `Endpoint` | – | Base address of the Logbook server, e.g. `https://logbook.example.com`. An absolute `http` or `https` address, which can include a path. |
 | `ApiKey` | – | API Key of the Application that sends the Log Events. |
 | `BatchSize` | `100` | Maximum number of events sent in one request. |
-| `FlushInterval` | `00:00:02` | Maximum time an event waits in the buffer before it is sent. |
+| `FlushInterval` | `00:00:02` | Maximum time an event waits in the buffer before it is sent. At most one day. |
 | `MaxQueueSize` | `10000` | Maximum number of events kept in memory. When the buffer is full, the oldest events are dropped. |
+| `MaxQueueBytes` | `67108864` (64 MiB) | Maximum memory of the events in the buffer, counting text at two bytes per character. When the buffer is full, the oldest events are dropped. |
+| `MaxRequestBytes` | `5242880` (5 MiB) | Maximum size of the JSON of one request before compression. Must not be larger than the setting `LogIngestion:MaxRequestBytes` of the server. |

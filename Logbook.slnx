@@ -21,5 +21,6 @@
     <File Path="tests/Directory.Build.props" />
     <Project Path="tests/Logbook.Api.IntegrationTests/Logbook.Api.IntegrationTests.csproj" />
     <Project Path="tests/Logbook.Sdk.Tests/Logbook.Sdk.Tests.csproj" />
+    <Project Path="tests/Logbook.Sdk.Tests.NetStandard/Logbook.Sdk.Tests.NetStandard.csproj" />
   </Folder>
 </Solution>

@@ -71,7 +71,8 @@ Services throw `NotFoundException` (404), `ConflictException` (409), `DomainVali
 ### Tests
 
 - `tests/Logbook.Api.IntegrationTests`: `LogbookApiFactory` (`WebApplicationFactory<Program>`) starts a PostgreSQL container, migrates it and runs in environment `Testing`. `MigrationTests` checks for model changes without a migration and needs no database.
-- `tests/Logbook.Sdk.Tests`: unit tests of the SDK without a server.
+- `tests/Logbook.Sdk.Tests`: unit tests of the SDK without a server. `tests/Logbook.Sdk.Tests.NetStandard` compiles the same files against the `netstandard2.0` build of the SDK; add nothing to it.
+- `SdkEndToEndTests` in the integration tests sends through the real SDK to the real server, so the format of the requests cannot drift apart unnoticed.
 - Test-wide build settings live in `tests/Directory.Build.props`.
 
 ## Docs

@@ -86,6 +86,8 @@ The SDK packages live in `sdk/` and are published to NuGet:
 
 The most important rule of the SDK is that it never hurts the application it runs in. A call to `ILogger` only puts the event into the buffer and returns. Sending happens in the background; if Logbook is slow or unreachable, the SDK retries and, when the buffer is full, drops the oldest events instead of using more memory or blocking.
 
+A batch stays in the buffer until the server has accepted it, so it counts towards the limits while it is being sent and is the first to be dropped. This is why the buffer is a queue behind a short lock and not a `Channel<T>`, from which an event is gone once it is read. The buffer is limited by memory as well as by number of events, because 10,000 events of 256 KiB would otherwise take gigabytes from the application. A batch is sent when it is full or when its oldest event has waited for the flush interval, compressed with gzip.
+
 The SDK does not reference the server projects. The two only share the format of the requests, which is versioned so that older SDKs keep working with newer servers.
 
 ## The database

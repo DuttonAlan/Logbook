@@ -17,6 +17,8 @@ public sealed class LogbookOptionsTests
         Assert.Equal(100, options.BatchSize);
         Assert.Equal(TimeSpan.FromSeconds(2), options.FlushInterval);
         Assert.Equal(10_000, options.MaxQueueSize);
+        Assert.Equal(64L * 1024 * 1024, options.MaxQueueBytes);
+        Assert.Equal(5 * 1024 * 1024, options.MaxRequestBytes);
         Assert.Null(options.Endpoint);
         Assert.Null(options.ApiKey);
     }

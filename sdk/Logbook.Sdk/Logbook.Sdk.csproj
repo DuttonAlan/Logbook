@@ -7,11 +7,13 @@
 
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
     <PackageReference Include="System.Text.Json" Version="10.0.14" />
-    <PackageReference Include="System.Threading.Channels" Version="10.0.14" />
+    <PackageReference Include="Microsoft.Bcl.TimeProvider" Version="10.0.14" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Logbook.Sdk.Tests" />
+    <InternalsVisibleTo Include="Logbook.Sdk.Tests.NetStandard" />
+    <InternalsVisibleTo Include="Logbook.Api.IntegrationTests" />
   </ItemGroup>
 
 </Project>

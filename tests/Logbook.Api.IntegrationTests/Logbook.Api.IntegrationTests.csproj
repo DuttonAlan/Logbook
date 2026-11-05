@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Logbook.Api\Logbook.Api.csproj" />
+    <ProjectReference Include="..\..\sdk\Logbook.Sdk\Logbook.Sdk.csproj" />
   </ItemGroup>
 
 </Project>
