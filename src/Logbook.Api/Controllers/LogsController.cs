@@ -4,7 +4,10 @@
 
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
+using System.Net.ServerSentEvents;
+using System.Runtime.CompilerServices;
 using System.Security.Claims;
+using System.Text.Json;
 
 using Logbook.Api.Authentication;
 using Logbook.Api.Authorization;
@@ -12,11 +15,13 @@ using Logbook.Api.LogEvents;
 using Logbook.Api.RateLimiting;
 using Logbook.Core.Application.LogEvents.Ingest;
 using Logbook.Core.Application.LogEvents.Search;
+using Logbook.Core.Application.LogEvents.Tail;
 using Logbook.Core.Domain.Entities;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Options;
 
 namespace Logbook.Api.Controllers;
 
@@ -29,16 +34,23 @@ namespace Logbook.Api.Controllers;
 /// </remarks>
 /// <param name="ingestLogEventsService">The Service to receive Log Events.</param>
 /// <param name="searchLogEventsService">The Service to search Log Events.</param>
+/// <param name="tailLogEventsService">The Service to follow new Log Events.</param>
+/// <param name="applicationLifetime">Tells when the server stops, which must end the live tails.</param>
+/// <param name="jsonOptions">The JSON settings of the responses, which the live tail must share with the search.</param>
 [ApiController]
 [Route("api/v1/logs")]
 [Tags("Logs")]
 public sealed class LogsController(
     IngestLogEventsService ingestLogEventsService,
-    SearchLogEventsService searchLogEventsService) : ControllerBase
+    SearchLogEventsService searchLogEventsService,
+    TailLogEventsService tailLogEventsService,
+    IHostApplicationLifetime applicationLifetime,
+    IOptions<JsonOptions> jsonOptions) : ControllerBase
 {
     private const int MaxLimit = 1000;
     private const int MaxSearchTextLength = 500;
     private const int MaxCursorLength = 64;
+    private const int MaxPropertyFilters = 10;
 
     /// <summary>
     ///     Searches Log Events, newest first.
@@ -53,6 +65,8 @@ public sealed class LogsController(
     /// <param name="applicationId" example="0199d1a2-7c3e-7b4a-9f10-5c963f66afa6">Only Log Events of this Application.</param>
     /// <param name="environment" example="Production">Only Log Events of this Environment, compared exactly.</param>
     /// <param name="text" example="order failed">Only Log Events whose message contains these words. Supports "exact phrases", OR, and -excluded words.</param>
+    /// <param name="traceId" example="4bf92f3577b34da6a3ce929d0e0e4736">Only Log Events of this trace, compared exactly.</param>
+    /// <param name="properties" example="OrderId=42">Only Log Events with this top-level property, as Name=Value. Can be repeated, and all must match.</param>
     /// <param name="cursor">The <c>nextCursor</c> of the previous page.</param>
     /// <param name="limit" example="100">The maximum number of Log Events on the page, at most 1000.</param>
     /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
@@ -74,13 +88,55 @@ public sealed class LogsController(
         [FromQuery] Guid? applicationId = null,
         [FromQuery, StringLength(LogEvent.EnvironmentMaxLength)] string? environment = null,
         [FromQuery, StringLength(MaxSearchTextLength)] string? text = null,
+        [FromQuery, StringLength(LogEvent.TraceFieldMaxLength)] string? traceId = null,
+        [FromQuery(Name = "property"), MaxLength(MaxPropertyFilters)] string?[]? properties = null,
         [FromQuery, StringLength(MaxCursorLength)] string? cursor = null,
         [FromQuery, Range(1, MaxLimit)] int limit = 100,
         CancellationToken cancellationToken = default)
     {
-        var filter = new LogEventFilter(from, to, levels, applicationId, environment, text);
+        var filter = new LogEventFilter(from, to, levels, applicationId, environment, text, traceId, ParseProperties(properties));
 
         return Ok(await searchLogEventsService.ExecuteAsync(filter, cursor, limit, cancellationToken));
+    }
+
+    /// <summary>
+    ///     Follows new Log Events as they are stored, as server-sent events.
+    /// </summary>
+    /// <remarks>
+    ///     The filters work as in the search. The stream sends the event <c>connected</c> once it is following, <c>log</c>
+    ///     with a Log Event in the format of the search, <c>gap</c> if Log Events were skipped because they arrive too fast,
+    ///     and <c>heartbeat</c> every 15 seconds when nothing else is sent. It ends when the server stops. This requires the
+    ///     admin key.
+    /// </remarks>
+    /// <param name="levels" example="Error">Only Log Events with this level. Can be repeated to allow several levels.</param>
+    /// <param name="applicationId" example="0199d1a2-7c3e-7b4a-9f10-5c963f66afa6">Only Log Events of this Application.</param>
+    /// <param name="environment" example="Production">Only Log Events of this Environment, compared exactly.</param>
+    /// <param name="text" example="order failed">Only Log Events whose message contains these words. Supports "exact phrases", OR, and -excluded words.</param>
+    /// <param name="traceId" example="4bf92f3577b34da6a3ce929d0e0e4736">Only Log Events of this trace, compared exactly.</param>
+    /// <param name="properties" example="OrderId=42">Only Log Events with this top-level property, as Name=Value. Can be repeated, and all must match.</param>
+    /// <returns>200 OK with the stream.</returns>
+    /// <response code="200">Responds with the stream of server-sent events.</response>
+    /// <response code="400">Responds with problem details if a parameter is not valid, e.g. an unknown level.</response>
+    /// <response code="500">Responds with problem details if an unexpected error occurred.</response>
+    [HttpGet("stream")]
+    [Authorize(AuthorizationPolicies.AdminApi)]
+    [ProducesResponseType<string>(StatusCodes.Status200OK, "text/event-stream")]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    public IResult Stream(
+        [FromQuery(Name = "level")] LogEventLevel[]? levels = null,
+        [FromQuery] Guid? applicationId = null,
+        [FromQuery, StringLength(LogEvent.EnvironmentMaxLength)] string? environment = null,
+        [FromQuery, StringLength(MaxSearchTextLength)] string? text = null,
+        [FromQuery, StringLength(LogEvent.TraceFieldMaxLength)] string? traceId = null,
+        [FromQuery(Name = "property"), MaxLength(MaxPropertyFilters)] string?[]? properties = null)
+    {
+        var filter = new LogEventFilter(null, null, levels, applicationId, environment, text, traceId, ParseProperties(properties));
+
+        // Without this, nginx holds the events back in its buffer by default, and the stream looks silent.
+        Response.Headers["X-Accel-Buffering"] = "no";
+
+        return TypedResults.ServerSentEvents(ReadTailAsync(filter, HttpContext.RequestAborted));
     }
 
     /// <summary>
@@ -118,5 +174,44 @@ public sealed class LogsController(
         var response = await ingestLogEventsService.ExecuteAsync(applicationId, logEvents);
 
         return Accepted(response);
+    }
+
+    private static LogEventPropertyFilter[]? ParseProperties(string?[]? properties) => properties?.Select(LogEventPropertyFilter.Parse).ToArray();
+
+    private async IAsyncEnumerable<SseItem<string>> ReadTailAsync(LogEventFilter filter, [EnumeratorCancellation] CancellationToken requestAborted)
+    {
+        // A stream never ends by itself, so it would hold up a graceful shutdown until the time for it is over, which is
+        // also the time the server needs to write the Log Events that are left in the queue.
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(requestAborted, applicationLifetime.ApplicationStopping);
+
+        await using var messages = tailLogEventsService.ExecuteAsync(filter, stop.Token).GetAsyncEnumerator(stop.Token);
+
+        while (true)
+        {
+            try
+            {
+                if (!await messages.MoveNextAsync())
+                {
+                    yield break;
+                }
+            }
+            catch (OperationCanceledException) when (stop.IsCancellationRequested)
+            {
+                yield break;
+            }
+
+            yield return ToServerSentEvent(messages.Current);
+        }
+    }
+
+    private SseItem<string> ToServerSentEvent(LogEventTailMessage message)
+    {
+        return message.Kind switch
+        {
+            LogEventTailMessageKind.LogEvent => new SseItem<string>(JsonSerializer.Serialize(message.LogEvent, jsonOptions.Value.JsonSerializerOptions), "log"),
+            LogEventTailMessageKind.Connected => new SseItem<string>("{}", "connected"),
+            LogEventTailMessageKind.Gap => new SseItem<string>("{}", "gap"),
+            _ => new SseItem<string>("{}", "heartbeat")
+        };
     }
 }

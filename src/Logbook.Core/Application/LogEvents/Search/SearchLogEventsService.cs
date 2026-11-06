@@ -2,10 +2,7 @@
 // Licensed under the MIT License.
 // See the LICENSE file in the project root for license information.
 
-using System.Text.Json;
-
 using Logbook.Core.Abstractions;
-using Logbook.Core.Domain.Entities;
 using Logbook.Core.Domain.Exceptions;
 
 namespace Logbook.Core.Application.LogEvents.Search;
@@ -46,47 +43,11 @@ public sealed class SearchLogEventsService(ILogEventRepository logEventRepositor
         }
 
         // One more than requested tells whether there is another page, without counting all matches.
-        var logEvents = await logEventRepository.Search(Normalize(filter), after, limit + 1, cancellationToken);
+        var logEvents = await logEventRepository.Search(filter.Normalize(), after, limit + 1, cancellationToken);
 
         var page = logEvents.Take(limit).ToList();
         var nextCursor = logEvents.Count > limit ? new LogEventCursor(page[^1].Timestamp, page[^1].Id).Encode() : null;
 
-        return new SearchLogEventsResponse([.. page.Select(ToResponse)], nextCursor);
+        return new SearchLogEventsResponse([.. page.Select(LogEventResponse.From)], nextCursor);
     }
-
-    private static LogEventFilter Normalize(LogEventFilter filter)
-    {
-        // Treated like the stored values, which are trimmed and have no U+0000. PostgreSQL rejects U+0000 in a parameter.
-        return filter with
-        {
-            Environment = NormalizeText(filter.Environment),
-            Text = NormalizeText(filter.Text)
-        };
-    }
-
-    private static string? NormalizeText(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? null : LogEventJson.ReplaceNullCharacters(value.Trim());
-    }
-
-    private static LogEventResponse ToResponse(LogEvent logEvent)
-    {
-        return new LogEventResponse(
-            logEvent.Id,
-            logEvent.ApplicationId,
-            logEvent.Timestamp,
-            logEvent.Level,
-            logEvent.Message,
-            logEvent.MessageTemplate,
-            logEvent.Category,
-            logEvent.Environment,
-            logEvent.EventId,
-            ToJson(logEvent.Exception),
-            logEvent.TraceId,
-            logEvent.SpanId,
-            ToJson(logEvent.Properties));
-    }
-
-    // As an element, so the response contains the JSON itself and not a string with escaped JSON.
-    private static JsonElement? ToJson(string? json) => json is null ? null : JsonSerializer.Deserialize<JsonElement>(json);
 }

@@ -7,6 +7,7 @@ using System.Text.Json;
 using Logbook.Core.Abstractions;
 using Logbook.Core.Application.LogEvents;
 using Logbook.Core.Application.LogEvents.Search;
+using Logbook.Core.Application.LogEvents.Tail;
 using Logbook.Core.Domain.Entities;
 using Logbook.Infrastructure.Ingestion;
 
@@ -237,6 +238,7 @@ public sealed class LogEventWriterTests
         return new LogEventWriterService(
             queue,
             CreateWriter(),
+            new LogEventFeed(TimeProvider.System),
             Options.Create(new LogIngestionOptions { WriteBatchSize = batchSize, WriteInterval = writeInterval ?? TimeSpan.FromMilliseconds(10) }),
             TimeProvider.System,
             _serviceLog);
@@ -297,6 +299,11 @@ public sealed class LogEventWriterTests
         }
 
         public Task<IReadOnlyList<LogEvent>> Search(LogEventFilter filter, LogEventCursor? after, int take, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<IReadOnlyList<LogEvent>> GetWritten(WrittenLogEvents written, LogEventFilter filter, int take, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }

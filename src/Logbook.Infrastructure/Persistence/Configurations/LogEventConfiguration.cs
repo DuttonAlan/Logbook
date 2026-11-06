@@ -69,6 +69,10 @@ public sealed class LogEventConfiguration : IEntityTypeConfiguration<LogEvent>
 
         builder.HasIndex(x => new { x.Environment, x.Timestamp, x.Id });
 
+        // Filtered, as a trace is only ever looked up by its Id, and many Log Events have none.
+        builder.HasIndex(x => new { x.TraceId, x.Timestamp, x.Id })
+            .HasFilter("\"TraceId\" IS NOT NULL");
+
         // 3 is LogEventLevel.Warning. These levels are rare but what people look for, and the index stays very small.
         builder.HasIndex(x => new { x.Timestamp, x.Id })
             .HasDatabaseName("IX_log_events_Timestamp_Id_WarningOrAbove")

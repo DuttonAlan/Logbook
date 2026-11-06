@@ -383,6 +383,94 @@ public sealed class LogSearchTests(LogbookApiFactory factory) : IClassFixture<Lo
     }
 
     [Fact]
+    public async Task TraceFilter_FindsOnlyThatTrace()
+    {
+        var now = DateTimeOffset.UtcNow;
+        await SendAsync(_sender, $$"""
+            [
+              { "timestamp": "{{now:O}}", "level": "Error", "message": "first", "traceId": "aaaa" },
+              { "timestamp": "{{now:O}}", "level": "Error", "message": "second", "traceId": "bbbb" },
+              { "timestamp": "{{now:O}}", "level": "Error", "message": "none" }
+            ]
+            """);
+        await WaitForAsync(3);
+
+        var page = await SearchAsync($"applicationId={_applicationId}&traceId=aaaa");
+
+        Assert.Equal("first", Assert.Single(page.Items).Message);
+    }
+
+    [Theory]
+    [InlineData("OrderId%3D42", "number")]
+    [InlineData("OrderId%3D42.0", "number")]
+    [InlineData("Code%3D42", "text number")]
+    [InlineData("UserId%3Dabc", "number")]
+    [InlineData("Name%3Da%3Db", "equals")]
+    [InlineData("Active%3Dtrue", "boolean")]
+    [InlineData("Empty%3D", "empty")]
+    [InlineData("Big%3D12345678901234567", "long")]
+    public async Task PropertyFilter_MatchesTheValue_WhateverItsJsonType(string filter, string expected)
+    {
+        var now = DateTimeOffset.UtcNow;
+        await SendAsync(_sender, $$"""
+            [
+              { "timestamp": "{{now:O}}", "level": "Error", "message": "number", "properties": { "OrderId": 42, "UserId": "abc" } },
+              { "timestamp": "{{now:O}}", "level": "Error", "message": "text number", "properties": { "Code": "42" } },
+              { "timestamp": "{{now:O}}", "level": "Error", "message": "equals", "properties": { "Name": "a=b" } },
+              { "timestamp": "{{now:O}}", "level": "Error", "message": "boolean", "properties": { "Active": true } },
+              { "timestamp": "{{now:O}}", "level": "Error", "message": "empty", "properties": { "Empty": "" } },
+              { "timestamp": "{{now:O}}", "level": "Error", "message": "long", "properties": { "Big": 12345678901234567 } },
+              { "timestamp": "{{now:O}}", "level": "Error", "message": "without properties" }
+            ]
+            """);
+        await WaitForAsync(7);
+
+        var page = await SearchAsync($"applicationId={_applicationId}&property={filter}");
+
+        Assert.Equal(expected, Assert.Single(page.Items).Message);
+    }
+
+    [Fact]
+    public async Task PropertyFilters_MustAllMatch()
+    {
+        var now = DateTimeOffset.UtcNow;
+        await SendAsync(_sender, $$"""
+            [
+              { "timestamp": "{{now:O}}", "level": "Error", "message": "both", "properties": { "A": 1, "B": 2 } },
+              { "timestamp": "{{now:O}}", "level": "Error", "message": "one", "properties": { "A": 1 } }
+            ]
+            """);
+        await WaitForAsync(2);
+
+        var page = await SearchAsync($"applicationId={_applicationId}&property=A%3D1&property=B%3D2");
+
+        Assert.Equal("both", Assert.Single(page.Items).Message);
+    }
+
+    [Theory]
+    [InlineData("property=")]
+    [InlineData("property=NoSeparator")]
+    [InlineData("property=%3DValue")]
+    [InlineData("property=A%3D1&property=A%3D1&property=A%3D1&property=A%3D1&property=A%3D1&property=A%3D1&property=A%3D1&property=A%3D1&property=A%3D1&property=A%3D1&property=A%3D1")]
+    public async Task PropertyFilter_NotValid_IsBadRequest(string query)
+    {
+        using var response = await _admin.GetAsync($"{Endpoint}?{query}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("%00")]
+    [InlineData("%22%5C")]
+    [InlineData("1e999999")]
+    public async Task PropertyFilter_WithUnusualValue_IsNotAnError(string value)
+    {
+        var page = await SearchAsync($"applicationId={_applicationId}&property=Name%3D{value}");
+
+        Assert.Empty(page.Items);
+    }
+
+    [Fact]
     public void Cursor_SurvivesEncoding_ToTheStoredPrecision()
     {
         var cursor = new LogEventCursor(new DateTime(2026, 11, 5, 10, 15, 0, DateTimeKind.Utc).AddTicks(1230), Guid.CreateVersion7());

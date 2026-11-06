@@ -49,6 +49,8 @@ public static class ServiceCollectionExtensions
         serviceCollection.AddSingleton<LogEventQueue>();
         serviceCollection.AddSingleton<ILogEventQueue>(services => services.GetRequiredService<LogEventQueue>());
         serviceCollection.AddSingleton<LogEventBatchWriter>();
+        serviceCollection.AddSingleton<LogEventFeed>();
+        serviceCollection.AddSingleton<ILogEventFeed>(services => services.GetRequiredService<LogEventFeed>());
         serviceCollection.AddHostedService<LogEventWriterService>();
 
         serviceCollection.AddSingleton<IApiKeyGenerator, ApiKeyGenerator>();

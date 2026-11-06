@@ -10,7 +10,7 @@ Logbook is a lightweight, self-hosted **logging solution for .NET applications**
 
 Add one NuGet package to your application, run one container, and see structured logs within minutes, without the weight of a full APM suite.
 
-> **Project status: early.** Logbook is being built step by step. The server receives and searches logs through its API; the SDK and the log explorer are next. See the [roadmap](docs/roadmap.md) for what is planned and in which order.
+> **Project status: early.** Logbook is being built step by step. The server, the SDK and the log explorer work; sign-in, retention and the first release are next. See the [roadmap](docs/roadmap.md) for what is planned and in which order.
 
 ## Features
 
@@ -18,7 +18,7 @@ Planned for version 1.0:
 
 - 📥 **Log API**: batched, compressed ingestion of structured log events, authenticated per Application with API Keys
 - 🧩 **C# SDK**: an `ILogger` provider that buffers and sends in the background, and never blocks or crashes your application
-- 🔎 **Web interface**: search and filter by time, level, Application and text, see properties and exceptions, and follow a live tail
+- 🔎 **Web interface**: search and filter by time, level, Application, text and properties, see exceptions and traces, and follow a live tail
 - 🔗 **Correlation**: every log event carries its trace and span, so all logs of a request are one click away
 - 🧹 **Retention** per Application, so the database stays small
 - 🏠 **Self-hosted**: one container and one PostgreSQL database
@@ -64,7 +64,7 @@ Logbook is built in milestones, each ending with something usable. Version 1.0 i
 | M0 | Foundations: solution, CI, container images, documentation |
 | M1 ✅ | Log API: Applications, API Keys, ingestion and query |
 | M2 ✅ | C# SDK: `ILogger` provider |
-| M3 | Web interface: log explorer with filters and live tail |
+| M3 ✅ | Web interface: log explorer with filters and live tail |
 | M4 | Security and operations: sign-in, retention, production guide, packages on NuGet |
 
 After 1.0: request and dependency tracking, dashboards, alerts and OpenTelemetry (OTLP) ingestion. Details: [roadmap](docs/roadmap.md).

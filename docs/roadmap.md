@@ -86,15 +86,15 @@ Every Log Event belongs to an **Application**, which the server takes from the A
 - [x] Tests for every failure path: server down, slow, returning errors, buffer full
 - [x] How-to guide: connect an application
 
-## M3: Web interface, log explorer
+## M3: Web interface, log explorer ✅
 
-- [ ] Routing, layout and API client (e.g. TanStack Router and Query)
-- [ ] Log list with virtualized infinite scrolling and level colors
-- [ ] Filters: time range, level, Application, Environment, free text, properties
-- [ ] Detail panel with properties, exception and stack trace
-- [ ] **Live tail** with server-sent events
-- [ ] "All Log Events of this trace"
-- [ ] Manage Applications and API Keys
+- [x] Routing, layout and API client (TanStack Router and Query)
+- [x] Log list with virtualized infinite scrolling and level colors
+- [x] Filters: time range, level, Application, Environment, free text, properties
+- [x] Detail panel with properties, exception and stack trace
+- [x] **Live tail** with server-sent events
+- [x] "All Log Events of this trace"
+- [x] Manage Applications and API Keys
 
 ## M4: Security and operations → 1.0
 

@@ -73,6 +73,7 @@ export default defineConfig({
           { text: 'Run Logbook from source', link: '/how-to/run-from-source' },
           { text: 'Manage Applications and API Keys', link: '/how-to/manage-applications' },
           { text: 'Connect an application', link: '/how-to/connect-application' },
+          { text: 'Search and follow logs', link: '/how-to/explore-logs' },
         ],
       },
       {

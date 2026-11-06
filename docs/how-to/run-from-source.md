@@ -51,7 +51,7 @@ npm ci
 npm run dev
 ```
 
-Open <http://localhost:5173/>. The Vite development server reloads on every change and forwards `/api` and `/health` to the server on port 5080.
+Open <http://localhost:5173/>. The Vite development server reloads on every change and forwards `/api` and `/health` to the server on port 5080. It asks for the admin key, which in `Development` is the value above. See [Search and follow logs](explore-logs.md) for what it can do.
 
 ## 5. Build and test
 

@@ -2,8 +2,6 @@
 
 In this tutorial you run Logbook and its database with Docker Compose, send your first Log Event and find it again. It takes about five minutes.
 
-> Logbook has finished milestone M1: the server receives and searches logs through its API. The SDK (M2) and the log explorer in the web interface (M3) come next, so this tutorial uses `curl` for now. It grows with each milestone; see the [roadmap](../roadmap.md).
-
 ## What you need
 
 - Docker with Docker Compose
@@ -43,11 +41,11 @@ Compose starts three containers in order:
 
 The first build takes a few minutes.
 
-## 4. Check that it works
+## 4. Open the web interface
 
-Open <http://localhost:5080/>. The web interface shows *Server status: Healthy*.
+Open <http://localhost:5080/> and enter the value of `LOGBOOK_ADMIN_KEY` from your `.env`. The web interface keeps it until you close the tab.
 
-The same status is available for monitoring tools:
+The top right shows the status of the server, which should be *Healthy*. The same status is available for monitoring tools:
 
 ```sh
 curl http://localhost:5080/health
@@ -57,26 +55,21 @@ curl http://localhost:5080/health
 {"status":"Healthy"}
 ```
 
-## 5. Send your first Log Event
+## 5. Create an Application
 
-Every program that sends logs is an Application, with its own API Key. In a second terminal, in the same folder, read the admin key from `.env` and create an Application:
+Every program that sends logs is an Application, with its own API Key.
 
-```sh
-export LOGBOOK_ADMIN_KEY=$(grep '^LOGBOOK_ADMIN_KEY=' .env | cut -d= -f2-)
-
-curl -X POST http://localhost:5080/api/v1/applications \
-  -H "Authorization: Bearer $LOGBOOK_ADMIN_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"My First Application"}'
-```
-
-The response contains the API Key as `apiKey.key`. It is shown only this once, so copy it:
+1. Choose **Applications**.
+2. Enter a name, e.g. `My First Application`, and choose **Create**.
+3. The API Key is shown only this once. Copy it, and in a second terminal, make it available:
 
 ```sh
 export LOGBOOK_API_KEY=…
 ```
 
-Now send a Log Event with this API Key:
+## 6. Send your first Log Event
+
+Go back to **Logs** and choose **Live tail**, so that you can watch it arrive. Then send a Log Event with this API Key:
 
 ```sh
 curl -X POST http://localhost:5080/api/v1/logs \
@@ -89,43 +82,15 @@ curl -X POST http://localhost:5080/api/v1/logs \
 {"accepted":1}
 ```
 
-## 6. Find it again
+Logbook writes Log Events in the background, so yours appears about a second later.
 
-Logbook writes Log Events in the background, so they can be found about a second later. Search for a word of the message, with the admin key:
+## 7. Find it again
 
-```sh
-curl -G http://localhost:5080/api/v1/logs \
-  -H "Authorization: Bearer $LOGBOOK_ADMIN_KEY" \
-  --data-urlencode "text=failed" \
-  --data-urlencode "level=Error"
-```
+Turn **Live tail** off, enter `failed` in the search field and choose the level **Error**. Your Log Event is the only result.
 
-The response contains your Log Event, with its structured properties, and `nextCursor` to get the next page, which is `null` here because there are no more:
+Select it to open its details. They show the property `OrderId`. Choose **Filter** next to it, and the search now also requires `OrderId=42`. The filters are part of the address, so you could send this search to someone else.
 
-```json
-{
-  "items": [
-    {
-      "id": "…",
-      "applicationId": "…",
-      "timestamp": "2026-11-04T10:15:00Z",
-      "level": "Error",
-      "message": "Order 42 failed",
-      "messageTemplate": null,
-      "category": null,
-      "environment": "Development",
-      "eventId": null,
-      "exception": null,
-      "traceId": null,
-      "spanId": null,
-      "properties": { "OrderId": 42 }
-    }
-  ],
-  "nextCursor": null
-}
-```
-
-## 7. Stop Logbook
+## 8. Stop Logbook
 
 Press <kbd>Ctrl</kbd>+<kbd>C</kbd>, then remove the containers:
 
@@ -138,6 +103,7 @@ The database stays in the volume `db-data`. To remove it as well, run `docker co
 ## Next steps
 
 - [Connect an application](../how-to/connect-application.md) to send the logs of a .NET application.
+- [Search and follow logs](../how-to/explore-logs.md) shows what else the web interface can do.
 - [Log API](../reference/log-api.md) lists everything you can send and search for.
 - [Manage Applications and API Keys](../how-to/manage-applications.md) to rotate an API Key or remove an Application.
 - [Run Logbook from source](../how-to/run-from-source.md) to develop it.

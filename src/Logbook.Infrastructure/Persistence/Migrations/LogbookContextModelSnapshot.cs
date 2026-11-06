@@ -145,6 +145,9 @@ namespace Logbook.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Environment", "Timestamp", "Id");
 
+                    b.HasIndex("TraceId", "Timestamp", "Id")
+                        .HasFilter("\"TraceId\" IS NOT NULL");
+
                     b.ToTable("log_events", "telemetry");
                 });
 

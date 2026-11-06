@@ -15,10 +15,35 @@ namespace Logbook.Core.Application.LogEvents.Search;
 /// <param name="ApplicationId">Only Log Events of this Application.</param>
 /// <param name="Environment">Only Log Events of this Environment, compared exactly.</param>
 /// <param name="Text">Only Log Events whose message matches this full-text search.</param>
+/// <param name="TraceId">Only Log Events of this trace, compared exactly.</param>
+/// <param name="Properties">Only Log Events with all of these properties.</param>
 public sealed record LogEventFilter(
     DateTimeOffset? From = null,
     DateTimeOffset? To = null,
     IReadOnlyList<LogEventLevel>? Levels = null,
     Guid? ApplicationId = null,
     string? Environment = null,
-    string? Text = null);
+    string? Text = null,
+    string? TraceId = null,
+    IReadOnlyList<LogEventPropertyFilter>? Properties = null)
+{
+    /// <summary>
+    ///     Treats the text filters like the stored values, which are trimmed and have no U+0000. PostgreSQL rejects U+0000
+    ///     in a parameter.
+    /// </summary>
+    /// <returns>The filter to pass to the repository.</returns>
+    public LogEventFilter Normalize()
+    {
+        return this with
+        {
+            Environment = NormalizeText(Environment),
+            Text = NormalizeText(Text),
+            TraceId = NormalizeText(TraceId)
+        };
+    }
+
+    private static string? NormalizeText(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : LogEventJson.ReplaceNullCharacters(value.Trim());
+    }
+}

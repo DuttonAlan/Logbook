@@ -1,8 +1,10 @@
 # Manage Applications and API Keys
 
-Every program that sends logs to Logbook is an Application, and it authenticates with an API Key. This guide creates an Application, rotates its API Key and removes it again with `curl`. All endpoints and fields are listed in the [admin API reference](../reference/admin-api.md).
+Every program that sends logs to Logbook is an Application, and it authenticates with an API Key. This guide creates an Application, rotates its API Key and removes it again.
 
-> An API Key can [send Log Events](../reference/log-api.md#send-log-events), which the SDK does for you, see [Connect an application](connect-application.md). The admin key can [search them](../reference/log-api.md#search-log-events), but only through the API so far; see the [roadmap](../roadmap.md).
+The easiest way is the web interface: choose *Applications*, where you can create and rename Applications, issue and revoke API Keys, and delete an Application. The rest of this guide does the same with `curl`, for scripts. All endpoints and fields are listed in the [admin API reference](../reference/admin-api.md).
+
+> An API Key can [send Log Events](../reference/log-api.md#send-log-events), which the SDK does for you, see [Connect an application](connect-application.md). The admin key can [search them](explore-logs.md).
 
 ## Prerequisites
 
