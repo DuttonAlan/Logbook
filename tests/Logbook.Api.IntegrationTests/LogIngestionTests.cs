@@ -11,6 +11,7 @@ using Logbook.Core.Abstractions;
 using Logbook.Core.Application.Applications.Create;
 using Logbook.Core.Application.LogEvents.Ingest;
 using Logbook.Core.Application.LogEvents.Search;
+using Logbook.Core.Application.LogEvents.Tail;
 using Logbook.Core.Domain.Entities;
 using Logbook.Infrastructure.Persistence;
 
@@ -620,6 +621,9 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
         var operations = provider.GetSwagger("v1").Paths
             .Where(path => path.Key.StartsWith("/api/", StringComparison.Ordinal))
             .SelectMany(path => path.Value.Operations!.Select(operation => (Name: $"{operation.Key} {path.Key}", operation.Value)))
+
+            // The stream has answered 200 before it first uses the database, so it can only end, never answer 503.
+            .Where(operation => operation.Name != "GET /api/v1/logs/stream")
             .ToList();
 
         Assert.NotEmpty(operations);
@@ -710,6 +714,11 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
         }
 
         public Task<IReadOnlyList<LogEvent>> Search(LogEventFilter filter, LogEventCursor? after, int take, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<IReadOnlyList<LogEvent>> GetWritten(WrittenLogEvents written, LogEventFilter filter, int take, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }

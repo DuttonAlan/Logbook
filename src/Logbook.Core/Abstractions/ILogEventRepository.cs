@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for license information.
 
 using Logbook.Core.Application.LogEvents.Search;
+using Logbook.Core.Application.LogEvents.Tail;
 using Logbook.Core.Domain.Entities;
 
 namespace Logbook.Core.Abstractions;
@@ -39,6 +40,20 @@ public interface ILogEventRepository
     public Task<IReadOnlyList<LogEvent>> Search(
         LogEventFilter filter,
         LogEventCursor? after,
+        int take,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Gets those Log Events of a written batch that match a filter, newest first.
+    /// </summary>
+    /// <param name="written">The written batch.</param>
+    /// <param name="filter">The filters to apply.</param>
+    /// <param name="take">The maximum number of Log Events to return.</param>
+    /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
+    /// <returns>The untracked Log Events.</returns>
+    public Task<IReadOnlyList<LogEvent>> GetWritten(
+        WrittenLogEvents written,
+        LogEventFilter filter,
         int take,
         CancellationToken cancellationToken = default);
 }

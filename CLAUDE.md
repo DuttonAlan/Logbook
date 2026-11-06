@@ -51,7 +51,7 @@ Server: three projects with a strict dependency direction: `Logbook.Api` → `Lo
 - **Logbook.Infrastructure** – `LogbookContext` with `IEntityTypeConfiguration`s in `Persistence/Configurations`, repositories, migrations, health checks and background services. Two PostgreSQL schemas (`Persistence/Schemas.cs`): `config` (Applications, API Keys, settings) and `telemetry` (log events, partitioned by day so retention drops partitions).
 - **Logbook.Api** – thin controllers that call Core services, `ProblemDetailsExceptionHandler`, health endpoints and `Program.cs` for wiring. It serves the built web interface from `wwwroot` (only in the container image) with a fallback to `index.html`; unknown `/api/*` routes return 404.
 
-Web interface: `src/Logbook.Web`, React + TypeScript with Vite. Not part of the .NET solution. The Dockerfile builds it and copies `dist/` into the Api's `wwwroot`.
+Web interface: `src/Logbook.Web`, React + TypeScript with Vite, TanStack Router, Query and Virtual, and plain CSS (`src/index.css`). Code by feature in `src/features/<area>/`, API calls in `src/api/`. The filters of the log explorer live in the URL. Content of Log Events is untrusted: render it as text only. Not part of the .NET solution. The Dockerfile builds it and copies `dist/` into the Api's `wwwroot`.
 
 SDK: `sdk/` holds the NuGet packages; shared package settings are in `sdk/Directory.Build.props`. `Logbook.Sdk` (net10.0, like all SDK packages) is the client: bounded in-memory buffer, background batching, retries. `Logbook.Extensions.Logging` is the `ILogger` provider, `Logbook.AspNetCore` adds request and dependency tracking. The SDK never references the server projects. It must never throw into or block the host application.
 
@@ -80,7 +80,7 @@ Services throw `NotFoundException` (404), `ConflictException` (409), `DomainVali
 The documentation follows Diátaxis (`docs/README.md` is the index). Keep it in sync with the code: a change to endpoints, settings or flows updates the matching reference page and any affected guide.
 
 - `docs/tutorials/` – learning by doing (Docker Compose quickstart).
-- `docs/how-to/` – task guides (run from source; later: production deployment, reverse proxy, connect an application).
+- `docs/how-to/` – task guides (run from source, manage Applications, connect an application, search and follow logs; later: production deployment, reverse proxy).
 - `docs/reference/` – exact facts: `configuration.md` (every setting, default and limit), `log-api.md`, `admin-api.md`, `health-checks.md`, `sdk-behavior.md`.
 - `docs/explanation/` – design and reasoning: architecture.
 - `docs/roadmap.md` – the milestones M0–M8 with their features. Tick off items as they are built.

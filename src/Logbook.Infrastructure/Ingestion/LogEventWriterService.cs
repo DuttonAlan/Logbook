@@ -21,12 +21,14 @@ namespace Logbook.Infrastructure.Ingestion;
 /// </remarks>
 /// <param name="queue">The queue to read from.</param>
 /// <param name="writer">The writer of a batch.</param>
+/// <param name="feed">The feed to tell about written batches, for the live tail.</param>
 /// <param name="options">The size and timing of a batch.</param>
 /// <param name="timeProvider">The clock for the timing of a batch.</param>
 /// <param name="logger">The Logger to record Log Events that could not be written before the shutdown.</param>
 public sealed class LogEventWriterService(
     LogEventQueue queue,
     LogEventBatchWriter writer,
+    LogEventFeed feed,
     IOptions<LogIngestionOptions> options,
     TimeProvider timeProvider,
     ILogger<LogEventWriterService> logger) : BackgroundService
@@ -87,6 +89,8 @@ public sealed class LogEventWriterService(
     private async Task WriteBatchAsync(CancellationToken cancellationToken)
     {
         await writer.WriteAsync(_batch, cancellationToken);
+
+        feed.Publish(_batch);
 
         queue.Release(_batch);
         _batch.Clear();

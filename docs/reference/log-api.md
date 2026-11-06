@@ -1,9 +1,9 @@
 # Log API
 
-The log API is what applications send their Log Events to and what you search them with. The [SDK](../explanation/architecture.md#the-sdk) sends for you, and the web interface will search for you (milestone M3); until then, you can call it directly.
+The log API is what applications send their Log Events to and what you search them with. The [SDK](../explanation/architecture.md#the-sdk) sends for you, and the [web interface](../how-to/explore-logs.md) searches and follows for you. You can also call it directly.
 
 - **Authentication to send:** the API Key of an Application in the header `X-Logbook-Key`. Without an active API Key the endpoint returns `401`, whatever the body contains. The admin key is not accepted. To get an API Key, see [Manage Applications and API Keys](../how-to/manage-applications.md).
-- **Authentication to search:** the admin key from the setting [`AdminApi:Key`](configuration.md#server), as `Authorization: Bearer …`. An API Key can only send, so one that leaks from an application cannot read any logs.
+- **Authentication to search and follow:** the admin key from the setting [`AdminApi:Key`](configuration.md#server), as `Authorization: Bearer …`. An API Key can only send, so one that leaks from an application cannot read any logs.
 - **Format:** JSON in and out. Errors are [problem details](https://www.rfc-editor.org/rfc/rfc9457).
 - **Schema:** the OpenAPI document and Swagger UI (`/swagger`) are served in `Development`.
 
@@ -100,7 +100,7 @@ Each API Key can send 6000 requests per minute, set with [`RateLimiting:ApiKeyPe
 - A burst of up to the full limit is allowed after the API Key has not been used for a while. The allowance refills continuously, so after a burst an application can go on at the allowed rate rather than wait for a minute to end.
 - Each API Key has its own limit, also within one Application.
 - The limit applies per server: with several servers, an API Key can send that many requests to each one.
-- Searching is not limited.
+- Searching and following are not limited.
 - A rejected API Key is logged as a warning with its Id, at most once per minute.
 
 Invalid API Keys have a separate limit, because each one costs a lookup in the database: 600 per minute for each IP address, set with [`RateLimiting:InvalidApiKeyPermitsPerMinute`](configuration.md#server). Valid API Keys do not use it up, but each one holds a place in it while it is being checked, so parallel requests cannot pass the limit together. Above the limit, **all** requests with an API Key from that IP address get `429` until the allowance refills, because an API Key cannot be checked without the lookup. Behind a reverse proxy, all clients share the address of the proxy until forwarded headers are supported (milestone M4), so one client flooding Logbook with invalid API Keys would also block the others. The IP address is logged as a warning, at most once per minute.
@@ -128,6 +128,8 @@ Returns one page of Log Events, newest first. All parameters are optional, and a
 | `applicationId` | Only Log Events of this Application. |
 | `environment` | Only Log Events of this Environment, compared exactly. `Unknown` finds Log Events sent without one. At most 100 characters. |
 | `text` | Only Log Events whose message matches this [full-text search](#full-text-search). At most 500 characters. |
+| `traceId` | Only Log Events of this trace, compared exactly. At most 64 characters. |
+| `property` | Only Log Events with this [property](#property-filters), as `Name=Value`. Repeat it for several, which must all match. At most 10. |
 | `limit` | Maximum number of Log Events on the page, from 1 to 1000. Default: `100`. |
 | `cursor` | The `nextCursor` of the previous page. |
 
@@ -161,7 +163,7 @@ The response contains the Log Events with the fields [listed above](#send-log-ev
 | Status | Description |
 |---|---|
 | `200` | The page. `items` is empty if nothing matches. An unknown `applicationId` is not an error. |
-| `400` | A parameter is not valid, e.g. an unknown `level`, a `limit` out of range, an empty time range, or a `cursor` that Logbook did not return. |
+| `400` | A parameter is not valid, e.g. an unknown `level`, a `limit` out of range, an empty time range, a `property` without a name, or a `cursor` that Logbook did not return. |
 | `401` | The admin key is missing or not valid. |
 | `503` | The database cannot be reached, with a `Retry-After` header in seconds. |
 
@@ -184,6 +186,12 @@ Paging is stable: Log Events that arrive while you page do not shift the results
 
 Any input is valid. Characters that have no meaning in a search are ignored, so input with nothing to search for, such as `!!!`, finds nothing. Empty input is treated as no filter.
 
+### Property filters
+
+`property=OrderId=42` finds Log Events whose `properties` have this value, with the `=` URL-encoded as `%3D` where your client does not do that for you. The name ends at the first `=`, so a value can contain one, but a name cannot. It finds only top-level properties, and the whole value must match, not a part of it.
+
+The value is text in the URL, so it matches any JSON type with the same meaning: `OrderId=42` finds both `"OrderId": 42` and `"OrderId": "42"`, and `Active=true` finds both `true` and `"true"`. It cannot find `null`, objects or arrays. Numbers compare by value, so `42.0` also finds `42`, and `1e3` finds `1000`. A value that is not a JSON number, such as `.5` or `007`, only finds that exact text.
+
 ### Example
 
 ```sh
@@ -195,4 +203,45 @@ curl -G "$LOGBOOK_URL/api/v1/logs" \
   --data-urlencode "environment=Production" \
   --data-urlencode 'text=order -shipped' \
   --data-urlencode "limit=50"
+```
+
+## Follow Log Events
+
+`GET /api/v1/logs/stream`
+
+Sends each Log Event as soon as it is stored, as [server-sent events](https://html.spec.whatwg.org/multipage/server-sent-events.html). It accepts the filters of the [search](#search-log-events), except `from`, `to`, `cursor` and `limit`, and they mean exactly the same. It requires the admin key, and sends no past Log Events: to fill a list, connect first and search when `connected` arrives, which leaves no gap, and expect some Log Events twice.
+
+| Event | Data | Meaning |
+|---|---|---|
+| `connected` | `{}` | Following has started. Everything stored from now on that matches is sent. |
+| `log` | A Log Event, as in the [search](#search-log-events) | A Log Event was stored. |
+| `gap` | `{}` | Log Events were skipped, because they arrive faster than they can be sent. They are stored, and can be searched. |
+| `heartbeat` | `{}` | Nothing else was sent for 15 seconds, and the connection is alive. |
+
+```text
+event: connected
+data: {}
+
+event: log
+data: {"id":"0199d1a2-7c3e-7b4a-9f10-7c963f66afa6","level":"Error","message":"Order 42 failed", …}
+```
+
+| Status | Description |
+|---|---|
+| `200` | The stream, as `text/event-stream`. It ends when the server stops, so connect again after that. |
+| `400` | A parameter is not valid, see the [search](#search-log-events). |
+| `401` | The admin key is missing or not valid. |
+
+- **Order:** Log Events are sent in the order they are stored, which is not always the order of their timestamps. A Log Event that arrives late is still sent. Within a batch, the oldest comes first.
+- **Limit:** at most 500 Log Events per written batch, the newest ones. A `gap` tells when there were more.
+- **Reconnecting:** the stream has no way to continue where it stopped, so search for what you may have missed.
+- **Several servers:** a stream only sends what the server it is connected to has written, so behind a load balancer it needs sticky sessions, and it only shows the part of the logs that this server received.
+- **Browsers:** `EventSource` cannot send the `Authorization` header. Read the response with `fetch` instead, as the web interface does.
+
+Each stream looks up every written batch in the database, usually once per second, so it costs one short query per batch while it is connected.
+
+```sh
+curl -N -G "$LOGBOOK_URL/api/v1/logs/stream" \
+  -H "Authorization: Bearer $LOGBOOK_ADMIN_KEY" \
+  --data-urlencode "level=Error"
 ```

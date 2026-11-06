@@ -73,6 +73,24 @@ internal static class LogEventJson
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 
+    /// <summary>
+    ///     Tells whether PostgreSQL can store a JSON number as a number in <c>jsonb</c>.
+    /// </summary>
+    /// <param name="number">The JSON number.</param>
+    /// <returns><see langword="true"/> if it fits into the range of <c>numeric</c>.</returns>
+    public static bool IsStorableNumber(JsonElement number)
+    {
+        var text = number.GetRawText();
+
+        if (text.Length > MaxNumberLength || !number.TryGetDouble(out var value) || !double.IsFinite(value))
+        {
+            return false;
+        }
+
+        // A value that rounds to zero but has non-zero digits, e.g. 1e-20000, is out of range as well.
+        return value != 0 || !text.TakeWhile(character => character is not ('e' or 'E')).Any(character => character is >= '1' and <= '9');
+    }
+
     private static void WriteValue(Utf8JsonWriter writer, JsonElement element, string paramName)
     {
         if (element.ValueKind is JsonValueKind.Object or JsonValueKind.Array && writer.CurrentDepth >= LogEvent.MaxJsonDepth)
@@ -121,27 +139,14 @@ internal static class LogEventJson
 
     private static void WriteNumber(Utf8JsonWriter writer, JsonElement number)
     {
-        var text = number.GetRawText();
-
-        if (IsStorableNumber(text, number))
+        if (IsStorableNumber(number))
         {
             number.WriteTo(writer);
         }
         else
         {
             // No data is lost: the number stays readable as text.
-            writer.WriteStringValue(text);
+            writer.WriteStringValue(number.GetRawText());
         }
-    }
-
-    private static bool IsStorableNumber(string text, JsonElement number)
-    {
-        if (text.Length > MaxNumberLength || !number.TryGetDouble(out var value) || !double.IsFinite(value))
-        {
-            return false;
-        }
-
-        // A value that rounds to zero but has non-zero digits, e.g. 1e-20000, is out of range as well.
-        return value != 0 || !text.TakeWhile(character => character is not ('e' or 'E')).Any(character => character is >= '1' and <= '9');
     }
 }

@@ -26,6 +26,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - SDK diagnostics through an `EventSource` named `Logbook-Sdk`.
 - `ILogger` provider: `builder.Logging.AddLogbook(…)` in `Logbook.Extensions.Logging` reads the section `Logbook` and sends message templates, scopes, `EventId`, inner and aggregate exceptions, and `traceId` and `spanId` from `Activity.Current`. The values of one event are limited as a whole, so that a call to the logger stays cheap. The Environment comes from `IHostEnvironment`, unless the new option `Environment` overrides it. Its own categories and `System.Net.Http.HttpClient` are excluded, so sending cannot create more to send. See [SDK behavior](docs/reference/sdk-behavior.md).
 - How-to guide: [connect an application](docs/how-to/connect-application.md).
+- Web interface: the log explorer lists Log Events with infinite scrolling and level colors, filters by time range, level, Application, Environment, text and properties, and shows the details of a Log Event with its exception, stack trace and properties. It also manages Applications and API Keys. It asks for the admin key, which it keeps until the tab is closed. See [Search and follow logs](docs/how-to/explore-logs.md).
+- Live tail: `GET /api/v1/logs/stream` sends new Log Events as server-sent events, with the same filters as the search. The web interface follows them, and can pause and catch up.
+- Search filters `traceId` and `property` on `GET /api/v1/logs`, and "All Log Events of this trace" in the web interface. The new index on the trace requires running the migrations, which can take a while on a large table.
 
 ### Changed
 

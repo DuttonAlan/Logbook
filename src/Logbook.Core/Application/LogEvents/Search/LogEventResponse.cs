@@ -37,4 +37,33 @@ public sealed record LogEventResponse(
     JsonElement? Exception,
     string? TraceId,
     string? SpanId,
-    JsonElement? Properties);
+    JsonElement? Properties)
+{
+    /// <summary>
+    ///     Creates the response for a stored Log Event.
+    /// </summary>
+    /// <param name="logEvent">The Log Event.</param>
+    /// <returns>The response.</returns>
+    public static LogEventResponse From(LogEvent logEvent)
+    {
+        ArgumentNullException.ThrowIfNull(logEvent);
+
+        return new LogEventResponse(
+            logEvent.Id,
+            logEvent.ApplicationId,
+            logEvent.Timestamp,
+            logEvent.Level,
+            logEvent.Message,
+            logEvent.MessageTemplate,
+            logEvent.Category,
+            logEvent.Environment,
+            logEvent.EventId,
+            ToJson(logEvent.Exception),
+            logEvent.TraceId,
+            logEvent.SpanId,
+            ToJson(logEvent.Properties));
+    }
+
+    // As an element, so the response contains the JSON itself and not a string with escaped JSON.
+    private static JsonElement? ToJson(string? json) => json is null ? null : JsonSerializer.Deserialize<JsonElement>(json);
+}

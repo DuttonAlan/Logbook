@@ -34,9 +34,9 @@ features:
     linkText: Milestone M2
   - icon: 🔎
     title: Web interface
-    details: Search and filter by time, level, Application and text, see properties and exceptions, and follow a live tail.
-    link: /roadmap#m3-web-interface-log-explorer
-    linkText: Milestone M3
+    details: Search and filter by time, level, Application, text and properties, see exceptions and traces, and follow a live tail.
+    link: /how-to/explore-logs
+    linkText: Search and follow logs
   - icon: 🏠
     title: Self-hosted
     details: One container and one PostgreSQL database. Retention per Application keeps it small.

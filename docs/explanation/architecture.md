@@ -64,13 +64,27 @@ Searching requires the admin key, not an API Key. An API Key lives in an applica
 
 Results are paged with a cursor, a position in the order of `Timestamp` and `Id`, rather than with page numbers. An offset would have to read and skip all earlier rows, so it gets slower with every page, and new Log Events would shift the results between requests. For the same reason there is no total count: on a table this size, counting is the expensive part.
 
-A search reads an index backwards from the newest Log Event until the page is full. That is fast when many Log Events match, but slow when few do, and a filter that matches nothing would read the whole table. So the filters that can match few rows have their own indexes: Application, Environment, and a small one for the levels from `Warning` up, which are rare but what people look for. Each index slows down writing, so there is deliberately none for the lower levels or for `Category`.
+A search reads an index backwards from the newest Log Event until the page is full. That is fast when many Log Events match, but slow when few do, and a filter that matches nothing would read the whole table. So the filters that can match few rows have their own indexes: Application, Environment, trace, and a small one for the levels from `Warning` up, which are rare but what people look for. Properties have a GIN index, which finds a value by containment. Each index slows down writing, so there is deliberately none for the lower levels or for `Category`.
 
 Full-text search covers whole words without stemming. Stemming follows the rules of one language, while logs mix languages and identifiers, and `failed` being found by `fail` is worth less than `OrderService` being found exactly as written.
+
+## Following Log Events
+
+The live tail sends a Log Event once it is stored. Doing this in the log endpoint would show Log Events that might never be written, so the background writer announces each batch after it is committed. The announcement carries only Ids. Every open stream then looks these Ids up in the database with its filters.
+
+That query per batch looks wasteful next to matching in memory, but it keeps one meaning for every filter: the full-text search in particular is PostgreSQL's, and a second implementation in C# would disagree with it in small ways. People rarely follow logs in more than a few tabs, so the cost stays small, and it does not grow with the volume of the logs, only with the number of batches and streams. Following by timestamp instead would need no announcement, but it would miss every Log Event that arrives late, and they all arrive somewhat late.
+
+The announcement never holds up writing. Each stream has a small queue of batches, and a stream that falls behind, e.g. on a slow network, loses the oldest and is told about the gap. The queue is in memory, so a stream only hears about the server it is connected to. Logbook is one process for now, and `LISTEN`/`NOTIFY` of PostgreSQL is the way out if that changes.
+
+A stream never ends by itself, so each one ends when the server starts to stop. Otherwise it would use up the shutdown timeout, which is the time the writer needs for what is left in its queue.
 
 ## The web interface
 
 `src/Logbook.Web` is a React application written in TypeScript and built with Vite. When the container image is built, its output is copied into the server's `wwwroot`, so one container serves the API and the interface from the same origin: no CORS, one address to secure. Every path that is not an API route or a file returns `index.html`, so the interface handles its own routes in the browser.
+
+The filters of the log explorer live in the URL rather than in the state of a component, so a search survives a reload and can be shared. Logs are large and arrive without end, so the list renders only the rows in view, and a live tail keeps a limited number of Log Events and renders new ones a few times per second instead of for each one.
+
+A live tail cannot use the `EventSource` of the browser, because it cannot send an `Authorization` header. The only way around that would be the admin key in the URL, where it would end up in the logs of every proxy, so the stream is read with `fetch`. The admin key stays in `sessionStorage`, so that a reload does not ask for it again, but closing the tab ends it. A script running on the page could read it from there, so everything that comes from a Log Event is rendered as text, never as HTML: anyone with an API Key can decide what these Log Events contain.
 
 During development the Vite server runs on its own port and forwards API calls to the server, so changes appear without a rebuild.
 
