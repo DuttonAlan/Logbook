@@ -409,6 +409,10 @@ public sealed class LogSearchTests(LogbookApiFactory factory) : IClassFixture<Lo
     [InlineData("Active%3Dtrue", "boolean")]
     [InlineData("Empty%3D", "empty")]
     [InlineData("Big%3D12345678901234567", "long")]
+    [InlineData("Amount%3D1e30", "exponent")]
+    [InlineData("Amount%3D1000000000000000000000000000000", "exponent")]
+    [InlineData("Huge%3D12345678901234567890123456789012345", "beyond decimal")]
+    [InlineData("TooLarge%3D1e999", "stored as text")]
     public async Task PropertyFilter_MatchesTheValue_WhateverItsJsonType(string filter, string expected)
     {
         var now = DateTimeOffset.UtcNow;
@@ -420,10 +424,13 @@ public sealed class LogSearchTests(LogbookApiFactory factory) : IClassFixture<Lo
               { "timestamp": "{{now:O}}", "level": "Error", "message": "boolean", "properties": { "Active": true } },
               { "timestamp": "{{now:O}}", "level": "Error", "message": "empty", "properties": { "Empty": "" } },
               { "timestamp": "{{now:O}}", "level": "Error", "message": "long", "properties": { "Big": 12345678901234567 } },
+              { "timestamp": "{{now:O}}", "level": "Error", "message": "exponent", "properties": { "Amount": 1e30 } },
+              { "timestamp": "{{now:O}}", "level": "Error", "message": "beyond decimal", "properties": { "Huge": 12345678901234567890123456789012345 } },
+              { "timestamp": "{{now:O}}", "level": "Error", "message": "stored as text", "properties": { "TooLarge": 1e999 } },
               { "timestamp": "{{now:O}}", "level": "Error", "message": "without properties" }
             ]
             """);
-        await WaitForAsync(7);
+        await WaitForAsync(10);
 
         var page = await SearchAsync($"applicationId={_applicationId}&property={filter}");
 

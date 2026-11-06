@@ -190,7 +190,7 @@ Any input is valid. Characters that have no meaning in a search are ignored, so 
 
 `property=OrderId=42` finds Log Events whose `properties` have this value, with the `=` URL-encoded as `%3D` where your client does not do that for you. The name ends at the first `=`, so a value can contain one, but a name cannot. It finds only top-level properties, and the whole value must match, not a part of it.
 
-The value is text in the URL, so it matches any JSON type with the same meaning: `OrderId=42` finds both `"OrderId": 42` and `"OrderId": "42"`, and `Active=true` finds both `true` and `"true"`. It cannot find `null`, objects or arrays. Numbers compare by value, so `42.0` also finds `42`.
+The value is text in the URL, so it matches any JSON type with the same meaning: `OrderId=42` finds both `"OrderId": 42` and `"OrderId": "42"`, and `Active=true` finds both `true` and `"true"`. It cannot find `null`, objects or arrays. Numbers compare by value, so `42.0` also finds `42`, and `1e3` finds `1000`. A value that is not a JSON number, such as `.5` or `007`, only finds that exact text.
 
 ### Example
 

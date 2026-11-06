@@ -2,8 +2,8 @@ import { Link, createRootRoute, createRoute, createRouter } from '@tanstack/reac
 import { Layout } from './components/Layout.tsx'
 import { ApplicationPage } from './features/applications/ApplicationPage.tsx'
 import { ApplicationsPage } from './features/applications/ApplicationsPage.tsx'
-import { parseLogSearch } from './features/logs/filters.ts'
-import { LogsPage } from './features/logs/LogsPage.tsx'
+import { parseLogSearch } from './features/log-explorer/filters.ts'
+import { LogsPage } from './features/log-explorer/LogsPage.tsx'
 
 const rootRoute = createRootRoute({
   component: Layout,

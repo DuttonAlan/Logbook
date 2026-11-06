@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 // See the LICENSE file in the project root for license information.
 
-using System.Globalization;
 using System.Text.Json;
 
 using Logbook.Core.Domain.Entities;
@@ -50,16 +49,22 @@ public sealed record LogEventPropertyFilter(string TextJson, string? LiteralJson
 
     private static string ToJson(string name, object value) => JsonSerializer.Serialize(new Dictionary<string, object> { [name] = value });
 
-    private static object? ReadLiteral(string text)
+    private static JsonElement? ReadLiteral(string text)
     {
-        if (text is "true" or "false")
+        try
         {
-            return text == "true";
+            var literal = JsonSerializer.Deserialize<JsonElement>(text);
+
+            // The same numbers that are stored as numbers. Any other is stored as a string, which the text form finds.
+            // Serialized as written, so a number keeps all its digits and its exponent.
+            return literal.ValueKind is JsonValueKind.True or JsonValueKind.False
+                || (literal.ValueKind == JsonValueKind.Number && LogEventJson.IsStorableNumber(literal))
+                ? literal
+                : null;
         }
-
-        // As a decimal, which keeps all digits of a 64-bit Id and cannot exceed the range of "numeric" like an exponent can.
-        const NumberStyles Styles = NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint;
-
-        return decimal.TryParse(text, Styles, CultureInfo.InvariantCulture, out var number) ? number : null;
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 }
