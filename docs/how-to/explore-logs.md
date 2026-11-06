@@ -38,7 +38,7 @@ Select a row to open its details: the whole message, its template, the exception
 
 Choose **Live tail** to see Log Events as they are stored, usually within a second or two. The search and all filters except the time range apply. It starts with the latest Log Events that match.
 
-- To read something, **Pause** or simply scroll down: the list holds still, and a button counts what has arrived. Choose that button or **Resume** to catch up.
+- To read something, **Pause** or simply scroll down: the list holds still, and a button counts what has arrived. Choose that button or **Resume** to catch up. Changing a filter also resumes, with the new results.
 - If the connection is lost, the live tail says so and reconnects by itself, then fills in the latest Log Events.
 - The browser keeps the latest 5000 Log Events of a live tail. For anything older, turn the live tail off and search.
 - If Log Events arrive faster than they can be shown, a message says that some were skipped. They are stored all the same and can be searched.

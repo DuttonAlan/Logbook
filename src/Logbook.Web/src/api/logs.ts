@@ -1,4 +1,5 @@
-import { getJson, send } from './client.ts'
+import { parseExactJson } from '../lib/json.ts'
+import { send } from './client.ts'
 import type { LogEventPage, LogEventQuery } from './types.ts'
 
 const BASE = '/api/v1/logs'
@@ -20,7 +21,7 @@ function toParams(query: LogEventQuery): URLSearchParams {
   return params
 }
 
-export function searchLogs(query: LogEventQuery, cursor: string | null, signal?: AbortSignal): Promise<LogEventPage> {
+export async function searchLogs(query: LogEventQuery, cursor: string | null, signal?: AbortSignal): Promise<LogEventPage> {
   const params = toParams(query)
 
   params.set('limit', String(LOG_PAGE_SIZE))
@@ -29,7 +30,9 @@ export function searchLogs(query: LogEventQuery, cursor: string | null, signal?:
     params.set('cursor', cursor)
   }
 
-  return getJson<LogEventPage>(`${BASE}?${params}`, signal)
+  const response = await send(`${BASE}?${params}`, { signal })
+
+  return parseExactJson<LogEventPage>(await response.text())
 }
 
 export function openLogStream(query: LogEventQuery, signal: AbortSignal): Promise<Response> {

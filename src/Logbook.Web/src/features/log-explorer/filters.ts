@@ -14,6 +14,9 @@ export type TimeRange = (typeof TIME_RANGES)[number]['value']
 
 export const DEFAULT_TIME_RANGE: TimeRange = '24h'
 
+// The limit of the log API.
+export const MAX_PROPERTY_FILTERS = 10
+
 // The filters in the URL, so that a search can be reloaded and shared. Everything optional is left out when not used.
 export interface LogSearch {
   range?: TimeRange

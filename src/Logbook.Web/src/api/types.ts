@@ -1,8 +1,10 @@
+import type { RawJsonNumber } from '../lib/json.ts'
+
 export const LOG_LEVELS = ['Trace', 'Debug', 'Information', 'Warning', 'Error', 'Critical'] as const
 
 export type LogLevel = (typeof LOG_LEVELS)[number]
 
-export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
+export type JsonValue = string | number | RawJsonNumber | boolean | null | JsonValue[] | { [key: string]: JsonValue }
 
 export interface LogEvent {
   id: string

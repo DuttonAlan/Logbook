@@ -1,10 +1,7 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { LOG_LEVELS, type ApplicationSummary, type LogLevel } from '../../api/types.ts'
 import { fromLocalInput, toLocalInput } from '../../lib/format.ts'
-import { DEFAULT_TIME_RANGE, TIME_RANGES, hasFilters, type LogSearch, type TimeRange } from './filters.ts'
-
-// The limit of the log API.
-const MAX_PROPERTY_FILTERS = 10
+import { DEFAULT_TIME_RANGE, MAX_PROPERTY_FILTERS, TIME_RANGES, hasFilters, type LogSearch, type TimeRange } from './filters.ts'
 
 const TYPING_DELAY = 350
 
@@ -19,6 +16,13 @@ interface FilterBarProps {
 // Applies typed text after a short pause, and without an entry per keystroke in the history of the browser.
 function useDebouncedValue(value: string, apply: (value: string) => void) {
   const [draft, setDraft] = useState(value)
+  const latestApply = useRef(apply)
+
+  // Read through a reference: the callback is new with every render, and a live tail renders more often than this delay,
+  // so restarting the timer for it would mean that it never ends.
+  useEffect(() => {
+    latestApply.current = apply
+  })
 
   useEffect(() => setDraft(value), [value])
 
@@ -27,10 +31,10 @@ function useDebouncedValue(value: string, apply: (value: string) => void) {
       return
     }
 
-    const timer = setTimeout(() => apply(draft), TYPING_DELAY)
+    const timer = setTimeout(() => latestApply.current(draft), TYPING_DELAY)
 
     return () => clearTimeout(timer)
-  }, [draft, value, apply])
+  }, [draft, value])
 
   return [draft, setDraft] as const
 }

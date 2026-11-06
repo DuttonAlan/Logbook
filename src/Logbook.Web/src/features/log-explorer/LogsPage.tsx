@@ -7,7 +7,7 @@ import type { LogEvent } from '../../api/types.ts'
 import { FilterBar } from './FilterBar.tsx'
 import { LogDetail } from './LogDetail.tsx'
 import { LogList, type LogListHandle } from './LogList.tsx'
-import { hasFilters, toContentQuery, toSearchQuery, type LogSearch } from './filters.ts'
+import { MAX_PROPERTY_FILTERS, hasFilters, toContentQuery, toSearchQuery, type LogSearch } from './filters.ts'
 import { useLiveTail, type LiveTailStatus } from './useLiveTail.ts'
 
 const route = getRouteApi('/')
@@ -60,6 +60,8 @@ export function LogsPage() {
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.nextCursor,
     placeholderData: keepPreviousData,
+    // It would copy exact numbers into plain objects when it merges a refetch, and these pages are large to compare.
+    structuralSharing: false,
     enabled: !isLive,
   })
 
@@ -86,10 +88,13 @@ export function LogsPage() {
     return tail.events.filter(({ id }) => !ids.has(id)).length
   }, [held, tail.events])
 
+  // What is held belongs to the previous search, and the new one starts at the top.
   useEffect(() => {
     setIsPaused(false)
     setIsScrolledAway(false)
-  }, [isLive])
+    setHeld(null)
+    list.current?.scrollToTop()
+  }, [isLive, contentKey])
 
   useEffect(() => {
     // Only grows, so that the suggestions do not vanish when a filter is applied.
@@ -239,6 +244,7 @@ export function LogsPage() {
             event={selected}
             applicationName={applicationNames.get(selected.applicationId)}
             onClose={closeDetail}
+            canAddPropertyFilter={(search.prop?.length ?? 0) < MAX_PROPERTY_FILTERS}
             onFilterProperty={addPropertyFilter}
             onShowTrace={showTrace}
           />

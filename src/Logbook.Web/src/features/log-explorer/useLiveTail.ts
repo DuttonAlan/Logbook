@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ApiError } from '../../api/client.ts'
 import { LOG_PAGE_SIZE, openLogStream, searchLogs } from '../../api/logs.ts'
 import type { LogEvent, LogEventQuery } from '../../api/types.ts'
+import { parseExactJson } from '../../lib/json.ts'
 import { readServerSentEvents } from '../../lib/sse.ts'
 
 export type LiveTailStatus = 'off' | 'connecting' | 'live' | 'reconnecting' | 'failed'
@@ -79,12 +80,15 @@ export function useLiveTail(query: LogEventQuery, enabled: boolean): LiveTail {
 
     // After the stream is connected, so that nothing falls between the end of this page and the start of the stream.
     async function catchUp() {
+      // Before the search: a live Log Event can arrive while it runs, and would hide that this page does not reach back.
+      const seenBefore = newestSeen
+
       try {
         const page = await searchLogs(query, null, signal)
         const oldest = page.items.at(-1)
 
         // A page full of Log Events newer than anything seen before: more may have been missed while disconnected.
-        if (newestSeen > 0 && page.items.length === LOG_PAGE_SIZE && oldest && Date.parse(oldest.timestamp) > newestSeen) {
+        if (seenBefore > 0 && page.items.length === LOG_PAGE_SIZE && oldest && Date.parse(oldest.timestamp) > seenBefore) {
           setHasGap(true)
         }
 
@@ -109,7 +113,7 @@ export function useLiveTail(query: LogEventQuery, enabled: boolean): LiveTail {
               setStatus('live')
               void catchUp()
             } else if (name === 'log') {
-              receive([JSON.parse(data) as LogEvent])
+              receive([parseExactJson<LogEvent>(data)])
             } else if (name === 'gap') {
               setHasGap(true)
             }
