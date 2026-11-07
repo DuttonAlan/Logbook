@@ -320,7 +320,13 @@ public sealed class AspNetCoreTrackingTests(LogbookApiFactory factory) : IClassF
 
         app.MapGet("/sql", async (HttpContext context) =>
         {
-            await using var connection = new NpgsqlConnection(factory.Services.GetRequiredService<IConfiguration>().GetConnectionString("Database"));
+            // A pool of its own, so that this always opens a new connection, which must not count as a command.
+            var connectionString = new NpgsqlConnectionStringBuilder(factory.Services.GetRequiredService<IConfiguration>().GetConnectionString("Database"))
+            {
+                ApplicationName = $"Tracking {Guid.NewGuid():N}"
+            };
+
+            await using var connection = new NpgsqlConnection(connectionString.ConnectionString);
             await connection.OpenAsync(context.RequestAborted);
 
             await using var command = new NpgsqlCommand("SELECT 1", connection);

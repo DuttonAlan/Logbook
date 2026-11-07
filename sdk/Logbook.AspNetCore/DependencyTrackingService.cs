@@ -30,12 +30,14 @@ internal sealed class DependencyTrackingService(SpanRecorder recorder) : IHosted
 {
     private const string HostingSourceName = "Microsoft.AspNetCore";
     private const string HttpSourceName = "System.Net.Http";
+    private const string NpgsqlSourceName = "Npgsql";
+    private const string MySqlConnectorSourceName = "MySqlConnector";
     private const string HttpDependencyType = "HTTP";
     private const string SqlDependencyType = "SQL";
 
     private const int FirstHttpErrorStatus = 400;
 
-    private static readonly string[] KnownSqlSourceNames = ["Npgsql", "MySqlConnector"];
+    private static readonly string[] KnownSqlSourceNames = [NpgsqlSourceName, MySqlConnectorSourceName];
 
     private ActivityListener? _listener;
     private HashSet<string> _sqlSourceNames = [];
@@ -113,6 +115,17 @@ internal sealed class DependencyTrackingService(SpanRecorder recorder) : IHosted
         return end >= 0 ? url![..end] : url;
     }
 
+    // Drivers also announce opening a connection, which is not a command and only happens when the pool has none idle.
+    private static bool IsConnectionOpen(Activity activity)
+    {
+        return activity.Source.Name switch
+        {
+            NpgsqlSourceName => activity.OperationName.StartsWith("CONNECT ", StringComparison.Ordinal),
+            MySqlConnectorSourceName => activity.OperationName == "Open",
+            _ => false
+        };
+    }
+
     private bool IsTracked(string sourceName)
     {
         return (sourceName == HttpSourceName && recorder.Options.TrackHttpDependencies) || _sqlSourceNames.Contains(sourceName);
@@ -179,6 +192,11 @@ internal sealed class DependencyTrackingService(SpanRecorder recorder) : IHosted
 
     private void RecordSql(Activity activity)
     {
+        if (IsConnectionOpen(activity))
+        {
+            return;
+        }
+
         var database = ReadText(activity, "db.namespace") ?? ReadText(activity, "db.name");
         var statement = recorder.Options.CaptureSqlText
             ? ReadText(activity, "db.query.text") ?? ReadText(activity, "db.statement")

@@ -78,7 +78,7 @@ builder.Services.AddLogbookTelemetry(options =>
 });
 ```
 
-The statements themselves are only sent with `CaptureSqlText`, because a statement without parameters can contain values.
+The statements themselves are only sent with `CaptureSqlText`, because a statement without parameters can contain values. Only commands are tracked, not the opening of a connection.
 
 This works with database drivers that publish an `ActivitySource`: **Npgsql** and **MySqlConnector** are built in, and `SqlActivitySources` adds the name of another one. It also works through Entity Framework Core on these drivers. **Microsoft.Data.SqlClient is not supported yet**, as it does not publish its commands this way, so nothing is tracked for SQL Server.
 
