@@ -45,14 +45,14 @@ public sealed class ApplyRetentionService(
             ? applications.Max(application => application.RetentionDays ?? defaultDays)
             : defaultDays;
 
-        var keepFrom = DateOnly.FromDateTime(now.AddDays(-longestDays));
-
         // First, as it is the cheap path, and may leave fewer rows to delete below.
-        while (await logEventRepository.DropOldestPartitionBefore(keepFrom, cancellationToken) is { } day)
+        while (await logEventRepository.DropOldestExpiredPartition(defaultDays, now, cancellationToken) is { } day)
         {
             logger.PartitionDropped(day);
         }
 
+        // The list only decides who needs this, so being out of date costs at most a wait for the next run. What gets
+        // removed depends on the current retention, which the repository reads together with each removal.
         foreach (var application in applications)
         {
             var days = application.RetentionDays ?? defaultDays;
@@ -62,7 +62,7 @@ public sealed class ApplyRetentionService(
                 continue;
             }
 
-            var deleted = await logEventRepository.DeleteOlderThan(application.Id, now.AddDays(-days), cancellationToken);
+            var deleted = await logEventRepository.DeleteExpired(application.Id, defaultDays, now, cancellationToken);
 
             if (deleted > 0)
             {

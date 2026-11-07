@@ -108,6 +108,32 @@ public sealed class RetentionTests(LogbookApiFactory factory) : IClassFixture<Lo
     }
 
     [Fact]
+    public async Task RaisingTheRetentionDuringARun_KeepsThePartition()
+    {
+        var application = await CreateApplicationAsync(retentionDays: 2);
+        var old = Now.AddDays(-5);
+        await StoreAsync(application, old, "keep me");
+
+        await RaiseRetentionDuringARunAsync(application, retentionDays: 100);
+
+        Assert.True(await PartitionExistsAsync(old));
+        Assert.Equal(["keep me"], await MessagesAsync(application));
+    }
+
+    [Fact]
+    public async Task RaisingTheRetentionDuringARun_KeepsTheRows()
+    {
+        var application = await CreateApplicationAsync(retentionDays: 2);
+        var longest = await CreateApplicationAsync(retentionDays: 200);
+        await StoreAsync(application, Now.AddDays(-5), "keep me");
+        await StoreAsync(longest, Now.AddDays(-5), "other");
+
+        await RaiseRetentionDuringARunAsync(application, retentionDays: 100);
+
+        Assert.Equal(["keep me"], await MessagesAsync(application));
+    }
+
+    [Fact]
     public async Task ApplicationWithoutRetention_UsesTheDefaultOfTheServer()
     {
         using var host = factory.WithWebHostBuilder(builder => builder.UseSetting("Retention:DefaultDays", "5"));
@@ -275,6 +301,31 @@ public sealed class RetentionTests(LogbookApiFactory factory) : IClassFixture<Lo
         await using var scope = host.Services.CreateAsyncScope();
 
         await scope.ServiceProvider.GetRequiredService<ApplyRetentionService>().ExecuteAsync(Token);
+    }
+
+    /// <summary>
+    ///     Starts a run while the change of the retention is not committed yet, so the run has read the old value, or would
+    ///     have, if it did not wait for the change. This is the moment a change can arrive during a long run.
+    /// </summary>
+    private async Task RaiseRetentionDuringARunAsync(Guid applicationId, int retentionDays)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<LogbookContext>();
+
+        await using var transaction = await context.Database.BeginTransactionAsync(Token);
+
+        await context.Database.ExecuteSqlAsync(
+            $"""UPDATE config.applications SET "RetentionDays" = {retentionDays} WHERE "Id" = {applicationId}""",
+            Token);
+
+        var run = ApplyRetentionAsync();
+
+        await Task.Delay(500, Token);
+
+        Assert.False(run.IsCompleted, "The run must wait for the change of the retention.");
+
+        await transaction.CommitAsync(Token);
+        await run;
     }
 
     private async Task<List<string>> MessagesAsync(Guid applicationId)

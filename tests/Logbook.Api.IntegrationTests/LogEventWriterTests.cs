@@ -313,12 +313,12 @@ public sealed class LogEventWriterTests
             throw new NotSupportedException();
         }
 
-        public Task<long> DeleteOlderThan(Guid applicationId, DateTime before, CancellationToken cancellationToken = default)
+        public Task<long> DeleteExpired(Guid applicationId, int defaultRetentionDays, DateTime now, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
 
-        public Task<DateOnly?> DropOldestPartitionBefore(DateOnly day, CancellationToken cancellationToken = default)
+        public Task<DateOnly?> DropOldestExpiredPartition(int defaultRetentionDays, DateTime now, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }

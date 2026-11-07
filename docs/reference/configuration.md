@@ -66,7 +66,7 @@ See [Configure a reverse proxy](../how-to/reverse-proxy.md).
 In the environment `Production`, which is the default, Logbook refuses to start and logs the reason if:
 
 - `AllowedHosts` is empty or contains `*`.
-- `AllowedHosts` names anything other than `localhost`, `127.0.0.1` or `[::1]`, while `ReverseProxy:Enabled` is off and no HTTPS endpoint is configured through `ASPNETCORE_URLS`, `ASPNETCORE_HTTPS_PORTS` or `Kestrel:Endpoints`: passwords and logs would travel in the clear. Where that is acceptable, e.g. on a separate network, set `Security:AllowInsecureHttp` to `true`.
+- `AllowedHosts` names anything other than `localhost`, `127.0.0.1` or `[::1]`, while `ReverseProxy:Enabled` is off and Logbook does not listen only on HTTPS: passwords and logs would travel in the clear. It counts what `Kestrel:Endpoints` sets, otherwise `ASPNETCORE_URLS`, otherwise `ASPNETCORE_HTTP_PORTS` and `ASPNETCORE_HTTPS_PORTS`. Plain HTTP on `localhost` or `127.0.0.1` is allowed next to HTTPS. The container image sets `ASPNETCORE_HTTP_PORTS=8080`, so with `ASPNETCORE_HTTPS_PORTS` also set that to empty. Where plain HTTP is acceptable, e.g. on a separate network, set `Security:AllowInsecureHttp` to `true`.
 - `SignIn:Administrator:Password` has the value from `appsettings.Development.json`.
 - The password in `ConnectionStrings:Database` is `12345`, `password` or `postgres`.
 - `ReverseProxy:KnownNetworks` contains a network that covers every address, such as `0.0.0.0/0`, as any client could then claim to be anyone.

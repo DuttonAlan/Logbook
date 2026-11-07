@@ -1,12 +1,13 @@
 import { useEffect, useState, useSyncExternalStore, type FormEvent, type ReactNode } from 'react'
-import { getCurrentSession, openIdConnectSignInUrl, signIn } from '../api/auth.ts'
+import { getCurrentSession, openIdConnectSignInUrl, signIn, signOut } from '../api/auth.ts'
 import { ApiError } from '../api/client.ts'
-import { getSession, getSignInNotice, setSession, subscribeToSession, type Session, type SignInNotice } from './session.ts'
+import { getSession, getSignInNotice, setSession, signOutFailed, signOutSucceeded, subscribeToSession, type Session, type SignInNotice } from './session.ts'
 
 const NOTICES: Record<Exclude<SignInNotice, null>, string> = {
   'session-expired': 'Your session has ended. Sign in again.',
   'access-denied': 'The provider signed you in, but your account has no access to Logbook.',
   'sign-in-failed': 'Signing in through the provider failed. Try again.',
+  'sign-out-failed': 'Signing out failed, so this browser is still signed in. Reloading the page would show your logs again.',
 }
 
 // Everything but the health check needs a session.
@@ -54,6 +55,29 @@ export function SessionGate({ children }: { children: ReactNode }) {
   )
 }
 
+function RetrySignOut() {
+  const [isSigningOut, setIsSigningOut] = useState(false)
+
+  async function retry() {
+    setIsSigningOut(true)
+
+    try {
+      await signOut()
+      signOutSucceeded()
+    } catch {
+      signOutFailed()
+    } finally {
+      setIsSigningOut(false)
+    }
+  }
+
+  return (
+    <button type="button" className="button" disabled={isSigningOut} onClick={() => void retry()}>
+      {isSigningOut ? 'Signing out…' : 'Try signing out again'}
+    </button>
+  )
+}
+
 function SignInOptions({ session }: { session: Session }) {
   const notice = useSyncExternalStore(subscribeToSession, getSignInNotice)
 
@@ -64,6 +88,7 @@ function SignInOptions({ session }: { session: Session }) {
           {NOTICES[notice]}
         </p>
       )}
+      {notice === 'sign-out-failed' && <RetrySignOut />}
       {session.openIdConnectProvider && (
         <a className="button primary" href={openIdConnectSignInUrl(window.location.pathname + window.location.search)}>
           Sign in with {session.openIdConnectProvider}

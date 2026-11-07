@@ -5,7 +5,7 @@ export interface Session {
   openIdConnectProvider: string | null
 }
 
-export type SignInNotice = 'session-expired' | 'access-denied' | 'sign-in-failed' | null
+export type SignInNotice = 'session-expired' | 'access-denied' | 'sign-in-failed' | 'sign-out-failed' | null
 
 const listeners = new Set<() => void>()
 
@@ -62,6 +62,21 @@ export function expireSession() {
   if (session?.isSignedIn) {
     notice = 'session-expired'
     signedOut()
+  }
+}
+
+// The cookie can only be removed by the server, so this browser is still signed in, even though nothing is shown anymore.
+export function signOutFailed() {
+  if (session && !session.isSignedIn) {
+    notice = 'sign-out-failed'
+    notify()
+  }
+}
+
+export function signOutSucceeded() {
+  if (notice === 'sign-out-failed') {
+    notice = null
+    notify()
   }
 }
 

@@ -56,6 +56,20 @@ public sealed class ProductionSettingsValidator(IHostEnvironment environment, IC
         return IPNetwork.TryParse(network, out var parsed) && parsed.PrefixLength == 0;
     }
 
+    private static bool IsHttps(string address)
+    {
+        return address.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsLoopback(string address)
+    {
+        // The host of an address such as http://+:8080 is no valid URI host, so it is read by hand.
+        var authority = address[(address.IndexOf("://", StringComparison.Ordinal) + "://".Length)..].Split('/')[0];
+        var host = authority.StartsWith('[') ? authority[..(authority.IndexOf(']', StringComparison.Ordinal) + 1)] : authority.Split(':')[0];
+
+        return LoopbackHosts.Contains(host, StringComparer.OrdinalIgnoreCase);
+    }
+
     private void CheckHosts(SecurityOptions options, List<string> failures)
     {
         var hosts = (configuration["AllowedHosts"] ?? string.Empty)
@@ -70,22 +84,60 @@ public sealed class ProductionSettingsValidator(IHostEnvironment environment, IC
 
         var isServedToOthers = hosts.Any(host => !LoopbackHosts.Contains(host, StringComparer.OrdinalIgnoreCase));
 
-        if (isServedToOthers && !options.AllowInsecureHttp && !configuration.GetValue<bool>($"{ReverseProxyOptions.SectionName}:Enabled") && !HasHttpsEndpoint())
+        if (isServedToOthers && !options.AllowInsecureHttp && !configuration.GetValue<bool>($"{ReverseProxyOptions.SectionName}:Enabled") && !ServesOnlyHttps())
         {
             failures.Add(
                 "Logbook would send passwords and logs in the clear, as it serves other hosts than this computer over plain HTTP. "
                 + $"Put it behind a reverse proxy with HTTPS and set '{ReverseProxyOptions.SectionName}:Enabled', "
-                + "or configure an HTTPS endpoint. Where plain HTTP is acceptable, set "
+                + "or listen only on HTTPS. The container image also listens on HTTP through ASPNETCORE_HTTP_PORTS, unless "
+                + "ASPNETCORE_URLS replaces it or it is set to empty. Where plain HTTP is acceptable, set "
                 + $"'{SecurityOptions.SectionName}:{nameof(SecurityOptions.AllowInsecureHttp)}'.");
         }
     }
 
-    private bool HasHttpsEndpoint()
+    /// <summary>
+    ///     Whether there is an HTTPS listener, and every other one can only be reached from this computer. One listener on
+    ///     plain HTTP is enough to send passwords and logs in the clear.
+    /// </summary>
+    private bool ServesOnlyHttps()
     {
-        var addresses = new[] { configuration["urls"], configuration["https_ports"] is { Length: > 0 } ? "https://" : null }
-            .Concat(configuration.GetSection("Kestrel:Endpoints").GetChildren().Select(endpoint => endpoint["Url"]));
+        var addresses = GetListenAddresses();
 
-        return addresses.Any(address => address?.Contains("https://", StringComparison.OrdinalIgnoreCase) == true);
+        return addresses.Any(IsHttps) && addresses.All(address => IsHttps(address) || IsLoopback(address));
+    }
+
+    /// <summary>
+    ///     The addresses Kestrel listens on. Each kind of setting replaces the next ones, rather than adding to them.
+    /// </summary>
+    private List<string> GetListenAddresses()
+    {
+        var endpoints = configuration.GetSection("Kestrel:Endpoints").GetChildren()
+            .Select(endpoint => endpoint["Url"])
+            .OfType<string>()
+            .ToList();
+
+        if (endpoints.Count > 0)
+        {
+            return endpoints;
+        }
+
+        var urls = configuration["urls"];
+
+        if (!string.IsNullOrWhiteSpace(urls))
+        {
+            return [.. urls.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+        }
+
+        return
+        [
+            .. Ports("http_ports").Select(port => $"http://*:{port}"),
+            .. Ports("https_ports").Select(port => $"https://*:{port}")
+        ];
+    }
+
+    private string[] Ports(string setting)
+    {
+        return (configuration[setting] ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
     private void CheckSecrets(List<string> failures)

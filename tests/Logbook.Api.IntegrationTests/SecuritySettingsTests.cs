@@ -211,6 +211,10 @@ public sealed class SecuritySettingsTests(LogbookApiFactory factory) : IClassFix
             { "AllowedHosts", new() { ["AllowedHosts"] = "logbook.example.com;*" } },
             { "in the clear", new() { ["AllowedHosts"] = "logbook.example.com" } },
             { "in the clear", new() { ["AllowedHosts"] = "logbook.example.com", ["urls"] = "http://+:8080" } },
+            { "in the clear", new() { ["AllowedHosts"] = "logbook.example.com", ["urls"] = "http://+:8080;https://+:8443" } },
+            { "in the clear", new() { ["AllowedHosts"] = "logbook.example.com", ["http_ports"] = "8080", ["https_ports"] = "8443" } },
+            { "in the clear", new() { ["AllowedHosts"] = "logbook.example.com", ["Kestrel:Endpoints:A:Url"] = "http://+:8080", ["Kestrel:Endpoints:B:Url"] = "https://+:8443" } },
+            { "in the clear", new() { ["AllowedHosts"] = "logbook.example.com", ["urls"] = "http://localhost:5000" } },
             { "development", new() { ["AllowedHosts"] = "localhost", ["SignIn:Administrator:Password"] = ProductionSettingsValidator.DevelopmentPassword } },
             { "well-known", new() { ["AllowedHosts"] = "localhost", ["ConnectionStrings:Database"] = "Host=db;Username=logbook;Password=12345" } },
             { "trusts every address", new() { ["AllowedHosts"] = "localhost", ["ReverseProxy:KnownNetworks:0"] = "0.0.0.0/0" } },
@@ -231,7 +235,12 @@ public sealed class SecuritySettingsTests(LogbookApiFactory factory) : IClassFix
             new Dictionary<string, string?> { ["AllowedHosts"] = "logbook.example.com", ["urls"] = "https://+:443" },
             new Dictionary<string, string?> { ["AllowedHosts"] = "logbook.example.com", ["https_ports"] = "443" },
             new Dictionary<string, string?> { ["AllowedHosts"] = "logbook.example.com", ["Kestrel:Endpoints:Https:Url"] = "https://+:443" },
+            new Dictionary<string, string?> { ["AllowedHosts"] = "logbook.example.com", ["urls"] = "https://+:443;http://localhost:5000" },
+            new Dictionary<string, string?> { ["AllowedHosts"] = "logbook.example.com", ["http_ports"] = string.Empty, ["https_ports"] = "443" },
+            new Dictionary<string, string?> { ["AllowedHosts"] = "logbook.example.com", ["http_ports"] = "8080", ["urls"] = "https://+:443" },
+            new Dictionary<string, string?> { ["AllowedHosts"] = "logbook.example.com", ["urls"] = "http://+:8080", ["Kestrel:Endpoints:Https:Url"] = "https://+:443" },
             new Dictionary<string, string?> { ["AllowedHosts"] = "logbook.internal", ["Security:AllowInsecureHttp"] = "true" },
+            new Dictionary<string, string?> { ["AllowedHosts"] = "logbook.example.com", ["ReverseProxy:Enabled"] = "true", ["http_ports"] = "8080" },
             new Dictionary<string, string?> { ["AllowedHosts"] = "localhost", ["ConnectionStrings:Database"] = "Host=db;Username=logbook;Password=a-good-password" }
         };
     }
