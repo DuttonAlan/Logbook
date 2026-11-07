@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore, type FormEvent, type ReactNode } from 'react'
 import { getCurrentSession, openIdConnectSignInUrl, signIn, signOut } from '../api/auth.ts'
 import { ApiError } from '../api/client.ts'
-import { getSession, getSignInNotice, setSession, signOutFailed, signOutSucceeded, subscribeToSession, type Session, type SignInNotice } from './session.ts'
+import { getSession, getSignInNotice, isSigningOut, setSession, subscribeToSession, type Session, type SignInNotice } from './session.ts'
 
 const NOTICES: Record<Exclude<SignInNotice, null>, string> = {
   'session-expired': 'Your session has ended. Sign in again.',
@@ -55,31 +55,12 @@ export function SessionGate({ children }: { children: ReactNode }) {
   )
 }
 
-function RetrySignOut() {
-  const [isSigningOut, setIsSigningOut] = useState(false)
-
-  async function retry() {
-    setIsSigningOut(true)
-
-    try {
-      await signOut()
-      signOutSucceeded()
-    } catch {
-      signOutFailed()
-    } finally {
-      setIsSigningOut(false)
-    }
-  }
-
-  return (
-    <button type="button" className="button" disabled={isSigningOut} onClick={() => void retry()}>
-      {isSigningOut ? 'Signing out…' : 'Try signing out again'}
-    </button>
-  )
-}
-
 function SignInOptions({ session }: { session: Session }) {
   const notice = useSyncExternalStore(subscribeToSession, getSignInNotice)
+  const signingOut = useSyncExternalStore(subscribeToSession, isSigningOut)
+
+  // The response of a sign-out removes the cookie, so a sign-out and a sign-in must not overlap, in either order.
+  const [isSigningIn, setIsSigningIn] = useState(false)
 
   return (
     <>
@@ -88,21 +69,37 @@ function SignInOptions({ session }: { session: Session }) {
           {NOTICES[notice]}
         </p>
       )}
-      {notice === 'sign-out-failed' && <RetrySignOut />}
-      {session.openIdConnectProvider && (
-        <a className="button primary" href={openIdConnectSignInUrl(window.location.pathname + window.location.search)}>
-          Sign in with {session.openIdConnectProvider}
-        </a>
+      {notice === 'sign-out-failed' && (
+        <button type="button" className="button" disabled={signingOut || isSigningIn} onClick={() => void signOut()}>
+          {signingOut ? 'Signing out…' : 'Try signing out again'}
+        </button>
       )}
-      {session.canSignInWithPassword && <PasswordForm session={session} />}
+      {session.openIdConnectProvider &&
+        // Not a link while signing out, as a link cannot be disabled.
+        (signingOut ? (
+          <button type="button" className="button primary" disabled>
+            Sign in with {session.openIdConnectProvider}
+          </button>
+        ) : (
+          <a className="button primary" href={openIdConnectSignInUrl(window.location.pathname + window.location.search)}>
+            Sign in with {session.openIdConnectProvider}
+          </a>
+        ))}
+      {session.canSignInWithPassword && <PasswordForm session={session} signingOut={signingOut} isSigningIn={isSigningIn} setIsSigningIn={setIsSigningIn} />}
     </>
   )
 }
 
-function PasswordForm({ session }: { session: Session }) {
+interface PasswordFormProps {
+  session: Session
+  signingOut: boolean
+  isSigningIn: boolean
+  setIsSigningIn: (isSigningIn: boolean) => void
+}
+
+function PasswordForm({ session, signingOut, isSigningIn, setIsSigningIn }: PasswordFormProps) {
   const [userName, setUserName] = useState('')
   const [password, setPassword] = useState('')
-  const [isSigningIn, setIsSigningIn] = useState(false)
   const [error, setError] = useState('')
 
   async function submit(event: FormEvent) {
@@ -150,8 +147,8 @@ function PasswordForm({ session }: { session: Session }) {
           {error}
         </p>
       )}
-      <button type="submit" className={session.openIdConnectProvider ? 'button' : 'button primary'} disabled={isSigningIn || userName === '' || password === ''}>
-        {isSigningIn ? 'Signing in…' : 'Sign in'}
+      <button type="submit" className={session.openIdConnectProvider ? 'button' : 'button primary'} disabled={signingOut || isSigningIn || userName === '' || password === ''}>
+        {signingOut ? 'Signing out…' : isSigningIn ? 'Signing in…' : 'Sign in'}
       </button>
     </form>
   )

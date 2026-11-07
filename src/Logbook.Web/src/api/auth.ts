@@ -1,4 +1,4 @@
-import type { Session } from '../auth/session.ts'
+import { signOutFinished, signOutStarted, type Session } from '../auth/session.ts'
 import { ApiError, getJson, send } from './client.ts'
 
 const BASE = '/api/v1/auth'
@@ -15,14 +15,19 @@ export async function signIn(userName: string, password: string) {
   })
 }
 
+// Sign-in waits for the sign-out, so a request that never gets an answer must not block it for good.
+const SIGN_OUT_TIMEOUT = 10_000
+
+// Never fails: the session tells how it went.
 export async function signOut() {
+  signOutStarted()
+
   try {
-    await send(`${BASE}/sign-out`, { method: 'POST' })
+    await send(`${BASE}/sign-out`, { method: 'POST', signal: AbortSignal.timeout(SIGN_OUT_TIMEOUT) })
+    signOutFinished(true)
   } catch (e) {
-    // The session has already expired, which is what was asked for.
-    if (!(e instanceof ApiError && e.status === 401)) {
-      throw e
-    }
+    // An answer of 401 means the session has already expired, which is what was asked for.
+    signOutFinished(e instanceof ApiError && e.status === 401)
   }
 }
 

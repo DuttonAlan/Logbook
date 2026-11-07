@@ -11,6 +11,7 @@ const listeners = new Set<() => void>()
 
 let session: Session | null = null
 let notice: SignInNotice = takeNoticeFromAddress()
+let signingOut = false
 
 function notify() {
   listeners.forEach((listener) => listener())
@@ -65,19 +66,22 @@ export function expireSession() {
   }
 }
 
-// The cookie can only be removed by the server, so this browser is still signed in, even though nothing is shown anymore.
-export function signOutFailed() {
-  if (session && !session.isSignedIn) {
-    notice = 'sign-out-failed'
-    notify()
-  }
+// A sign-out in progress. What is on the screen goes away at once, but its response removes the cookie, so it must not
+// overlap with a sign-in: it would remove the new session if it arrives last.
+export function isSigningOut(): boolean {
+  return signingOut
 }
 
-export function signOutSucceeded() {
-  if (notice === 'sign-out-failed') {
-    notice = null
-    notify()
-  }
+export function signOutStarted() {
+  signingOut = true
+  signedOut()
+}
+
+// If it failed, this browser is still signed in, even though nothing is shown anymore, as only the server can remove the cookie.
+export function signOutFinished(succeeded: boolean) {
+  signingOut = false
+  notice = succeeded ? null : 'sign-out-failed'
+  notify()
 }
 
 export function subscribeToSession(listener: () => void): () => void {

@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, Outlet } from '@tanstack/react-router'
 import { useSyncExternalStore } from 'react'
 import { signOut } from '../api/auth.ts'
-import { getSession, signedOut, signOutFailed, subscribeToSession } from '../auth/session.ts'
+import { getSession, subscribeToSession } from '../auth/session.ts'
 
 interface HealthResponse {
   status: 'Healthy' | 'Degraded' | 'Unhealthy'
@@ -37,17 +37,6 @@ function ServerStatus() {
 export function Layout() {
   const userName = useSyncExternalStore(subscribeToSession, () => getSession()?.userName)
 
-  async function leave() {
-    // Before the answer, so that what is on the screen goes away at once.
-    signedOut()
-
-    try {
-      await signOut()
-    } catch {
-      signOutFailed()
-    }
-  }
-
   return (
     <div className="app">
       <header className="topbar">
@@ -63,7 +52,7 @@ export function Layout() {
         <div className="topbar-end">
           <ServerStatus />
           {userName && <span className="hint">{userName}</span>}
-          <button type="button" className="button small quiet" onClick={() => void leave()}>
+          <button type="button" className="button small quiet" onClick={() => void signOut()}>
             Sign out
           </button>
         </div>
