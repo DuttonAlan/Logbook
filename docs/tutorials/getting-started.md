@@ -14,9 +14,9 @@ git clone https://github.com/DuttonAlan/Logbook.git
 cd Logbook
 ```
 
-## 2. Set the database password and the admin key
+## 2. Set the passwords
 
-Docker Compose reads the password of the PostgreSQL user and the key for the admin API from a file `.env`, which Git ignores:
+Docker Compose reads the password of the PostgreSQL user and the password to sign in to Logbook from a file `.env`, which Git ignores:
 
 ```sh
 cp .env.example .env
@@ -25,7 +25,7 @@ cp .env.example .env
 Open `.env` and set:
 
 - `POSTGRES_PASSWORD` to a password of your choice.
-- `LOGBOOK_ADMIN_KEY` to a random value of at least 32 characters, e.g. the output of `openssl rand -base64 32`.
+- `LOGBOOK_ADMIN_PASSWORD` to a password of at least 12 characters, e.g. the output of `openssl rand -base64 24`.
 
 ## 3. Start Logbook
 
@@ -43,7 +43,7 @@ The first build takes a few minutes.
 
 ## 4. Open the web interface
 
-Open <http://localhost:5080/> and enter the value of `LOGBOOK_ADMIN_KEY` from your `.env`. The web interface keeps it until you close the tab.
+Open <http://localhost:5080/> and sign in with the name `admin` and the value of `LOGBOOK_ADMIN_PASSWORD` from your `.env`.
 
 The top right shows the status of the server, which should be *Healthy*. The same status is available for monitoring tools:
 
@@ -106,5 +106,6 @@ The database stays in the volume `db-data`. To remove it as well, run `docker co
 - [Search and follow logs](../how-to/explore-logs.md) shows what else the web interface can do.
 - [Log API](../reference/log-api.md) lists everything you can send and search for.
 - [Manage Applications and API Keys](../how-to/manage-applications.md) to rotate an API Key or remove an Application.
+- [Deploy to production](../how-to/deploy-production.md) to use it for real.
 - [Run Logbook from source](../how-to/run-from-source.md) to develop it.
 - [Architecture](../explanation/architecture.md) explains how the parts fit together.

@@ -31,4 +31,10 @@ public sealed class RateLimitOptions
     ///     what a misconfigured application sends.
     /// </summary>
     public int InvalidApiKeyPermitsPerMinute { get; set; } = 600;
+
+    /// <summary>
+    ///     Failed sign-ins per minute, per IP address and server. Above this, all sign-ins from that IP address are rejected.
+    ///     Defaults to 10, enough for someone who mistypes, and too few to guess a password.
+    /// </summary>
+    public int InvalidSignInPermitsPerMinute { get; set; } = 10;
 }

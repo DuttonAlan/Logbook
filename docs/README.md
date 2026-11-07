@@ -23,11 +23,16 @@ Start here if you are new to Logbook.
 - [Manage Applications and API Keys](how-to/manage-applications.md)
 - [Connect an application](how-to/connect-application.md)
 - [Search and follow logs](how-to/explore-logs.md)
+- [Configure sign-in](how-to/configure-sign-in.md)
+- [Deploy to production](how-to/deploy-production.md)
+- [Configure a reverse proxy](how-to/reverse-proxy.md)
+- [Upgrade Logbook](how-to/upgrade.md)
+- [Back up and restore](how-to/back-up-and-restore.md)
 
 ## Reference
 
 - [Configuration](reference/configuration.md): every setting, its default and its limits
-- [Admin API](reference/admin-api.md): manage Applications and API Keys
+- [Admin API](reference/admin-api.md): sign in, manage Applications and API Keys
 - [Log API](reference/log-api.md): send, search and follow Log Events
 - [SDK behavior](reference/sdk-behavior.md): retries, limits, shutdown and diagnostics of the SDK
 - [Health checks](reference/health-checks.md)

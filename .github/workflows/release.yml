@@ -1,10 +1,11 @@
 name: Release
 
-# Publishes the container images to GitHub Container Registry when a version tag is pushed, e.g. v0.1.0:
-#   ghcr.io/<owner>/logbook:0.1.0           the server with the web interface
-#   ghcr.io/<owner>/logbook-migrator:0.1.0  the database migrations
+# Publishes a release when a version tag is pushed, e.g. v1.0.0, after the tests have passed:
+#   ghcr.io/<owner>/logbook:1.0.0           the server with the web interface
+#   ghcr.io/<owner>/logbook-migrator:1.0.0  the database migrations
+#   Logbook.Sdk and Logbook.Extensions.Logging on NuGet, which needs the repository secret NUGET_API_KEY
 #
-# Publishing the SDK packages to NuGet follows with milestone M2.
+# Logbook.AspNetCore has no code yet (milestone M5), so it is not published.
 
 on:
   push:
@@ -13,9 +14,29 @@ on:
 permissions:
   contents: read
 
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
 jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Test
+        run: dotnet test --solution Logbook.slnx --configuration Release
+
   images:
     name: Publish ${{ matrix.image }}
+    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -58,9 +79,40 @@ jobs:
         with:
           context: .
           target: ${{ matrix.target }}
+          build-args: VERSION=${{ steps.meta.outputs.version }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: mode=max
           sbom: true
+
+  packages:
+    name: Publish SDK packages
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Pack
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for project in sdk/Logbook.Sdk sdk/Logbook.Extensions.Logging; do
+            dotnet pack "$project" --configuration Release --output artifacts/packages -p:Version="$version"
+          done
+
+      # --skip-duplicate, so that a failed run can be started again. The symbol packages are pushed with their packages.
+      - name: Push to NuGet
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: >
+          dotnet nuget push "artifacts/packages/*.nupkg"
+          --api-key "$NUGET_API_KEY"
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate

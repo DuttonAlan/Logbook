@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, getRouteApi, useNavigate } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
-import { deleteApplication, applicationKeys, getApplication, issueApiKey, renameApplication, revokeApiKey } from '../../api/applications.ts'
+import { applicationKeys, changeRetention, deleteApplication, getApplication, issueApiKey, renameApplication, revokeApiKey } from '../../api/applications.ts'
 import { ApiError } from '../../api/client.ts'
 import type { ApiKey, Application, IssuedApiKey } from '../../api/types.ts'
 import { ConfirmDialog } from '../../components/ConfirmDialog.tsx'
@@ -179,6 +179,88 @@ function ApiKeys({ application }: { application: Application }) {
   )
 }
 
+const MAX_RETENTION_DAYS = 3650
+
+function RetentionSection({ application }: { application: Application }) {
+  const queryClient = useQueryClient()
+  const [days, setDays] = useState(application.retentionDays?.toString() ?? '')
+  const [isConfirming, setIsConfirming] = useState(false)
+
+  const retentionDays = days.trim() === '' ? null : Number(days)
+
+  const change = useMutation({
+    mutationFn: () => changeRetention(application.id, retentionDays),
+    onSuccess: () => {
+      setIsConfirming(false)
+      void queryClient.invalidateQueries({ queryKey: applicationKeys.detail(application.id) })
+    },
+  })
+
+  // Going back to the default can be shorter as well, so that asks, too.
+  const canDeleteLogEvents = retentionDays === null || retentionDays < application.effectiveRetentionDays
+
+  function submit(event: FormEvent) {
+    event.preventDefault()
+
+    if (canDeleteLogEvents) {
+      setIsConfirming(true)
+    } else {
+      change.mutate()
+    }
+  }
+
+  return (
+    <section>
+      <h2>Retention</h2>
+      <p>
+        Log Events are kept for {application.effectiveRetentionDays} days{application.retentionDays === null && ', the default of this server'}. Older ones are removed
+        automatically and cannot be recovered.
+      </p>
+      <form className="inline-form" onSubmit={submit}>
+        <label className="field">
+          <span>Days (empty: the default)</span>
+          <input
+            className="input"
+            type="number"
+            min={1}
+            max={MAX_RETENTION_DAYS}
+            step={1}
+            value={days}
+            onChange={(event) => {
+              setDays(event.target.value)
+              change.reset()
+            }}
+          />
+        </label>
+        <button type="submit" className="button" disabled={change.isPending || retentionDays === application.retentionDays}>
+          Change retention
+        </button>
+        {change.isSuccess && <span role="status">Changed.</span>}
+      </form>
+      {change.isError && !isConfirming && (
+        <p className="message error" role="alert">
+          {change.error.message}
+        </p>
+      )}
+      {isConfirming && (
+        <ConfirmDialog
+          title="Change the retention?"
+          confirmLabel="Change retention"
+          isPending={change.isPending}
+          error={change.error?.message}
+          onConfirm={() => change.mutate()}
+          onCancel={() => {
+            setIsConfirming(false)
+            change.reset()
+          }}
+        >
+          <p>Log Events past the new retention are removed with the next retention run, by default within an hour. This cannot be undone.</p>
+        </ConfirmDialog>
+      )}
+    </section>
+  )
+}
+
 function DeleteSection({ application }: { application: Application }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -252,6 +334,7 @@ export function ApplicationPage() {
           </p>
           <RenameForm key={application.data.name} application={application.data} />
           <ApiKeys application={application.data} />
+          <RetentionSection key={application.data.retentionDays ?? 'default'} application={application.data} />
           <DeleteSection application={application.data} />
         </>
       )}

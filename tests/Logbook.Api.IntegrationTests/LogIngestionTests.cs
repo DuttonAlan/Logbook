@@ -596,7 +596,7 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
     }
 
     [Fact]
-    public void OpenApiDocument_DescribesTheApiKeyForLogs_AndTheAdminKeyForApplications()
+    public void OpenApiDocument_DescribesTheApiKeyForLogs_AndTheSessionForApplications()
     {
         var provider = factory.Services.GetRequiredService<Swashbuckle.AspNetCore.Swagger.ISwaggerProvider>();
 
@@ -606,10 +606,10 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
         var applications = document.Paths["/api/v1/applications"].Operations![System.Net.Http.HttpMethod.Get];
 
         Assert.Equal("ApiKey", Assert.Single(Assert.Single(logs.Security!)!.Keys).Reference.Id);
-        Assert.Equal("Bearer", Assert.Single(Assert.Single(applications.Security!)!.Keys).Reference.Id);
+        Assert.Equal("Session", Assert.Single(Assert.Single(applications.Security!)!.Keys).Reference.Id);
 
         var search = document.Paths["/api/v1/logs"].Operations![System.Net.Http.HttpMethod.Get];
-        Assert.Equal("Bearer", Assert.Single(Assert.Single(search.Security!)!.Keys).Reference.Id);
+        Assert.Equal("Session", Assert.Single(Assert.Single(search.Security!)!.Keys).Reference.Id);
         Assert.Contains(search.Parameters!, parameter => parameter.Name == "level");
     }
 
@@ -624,6 +624,9 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
 
             // The stream has answered 200 before it first uses the database, so it can only end, never answer 503.
             .Where(operation => operation.Name != "GET /api/v1/logs/stream")
+
+            // These only look at the session cookie, and if its keys cannot be read, there is no session.
+            .Where(operation => operation.Name is not ("GET /api/v1/auth/session" or "POST /api/v1/auth/sign-out"))
             .ToList();
 
         Assert.NotEmpty(operations);
@@ -724,6 +727,16 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
         }
 
         public Task<long> DeleteByApplication(Guid applicationId, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<long> DeleteExpired(Guid applicationId, int defaultRetentionDays, DateTime now, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<DateOnly?> DropOldestExpiredPartition(int defaultRetentionDays, DateTime now, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }

@@ -39,7 +39,7 @@ dotnet run --project src/Logbook.Api
 
 The `https` launch profile also listens on <https://localhost:7080>. Trust the .NET development certificate once with `dotnet dev-certs https --trust`.
 
-The [admin API](../reference/admin-api.md) needs the admin key. In `Development` it is `development-only-admin-key-do-not-deploy`, from `appsettings.Development.json`. In Swagger UI, enter it under *Authorize*.
+The [admin API](../reference/admin-api.md) needs a session. In `Development`, sign in as `admin` with the password `development-only-password-do-not-deploy`, from `appsettings.Development.json`. In Swagger UI, call `POST /api/v1/auth/sign-in` with these first.
 
 ## 4. Run the web interface
 
@@ -51,7 +51,7 @@ npm ci
 npm run dev
 ```
 
-Open <http://localhost:5173/>. The Vite development server reloads on every change and forwards `/api` and `/health` to the server on port 5080. It asks for the admin key, which in `Development` is the value above. See [Search and follow logs](explore-logs.md) for what it can do.
+Open <http://localhost:5173/>. The Vite development server reloads on every change and forwards `/api` and `/health` to the server on port 5080. Sign in with the name and password above. See [Search and follow logs](explore-logs.md) for what it can do.
 
 ## 5. Build and test
 

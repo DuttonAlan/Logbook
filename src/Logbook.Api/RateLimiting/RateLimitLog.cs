@@ -14,4 +14,7 @@ internal static partial class RateLimitLog
 
     [LoggerMessage(EventId = 2202, Level = LogLevel.Warning, Message = "IP address {IpAddress} tried too many API Keys that are not valid, so its requests with an API Key are rejected. Reported at most once per minute.")]
     public static partial void TooManyInvalidApiKeys(this ILogger logger, string ipAddress);
+
+    [LoggerMessage(EventId = 2203, Level = LogLevel.Warning, Message = "IP address {IpAddress} failed to sign in too many times, so its sign-ins are rejected. Reported at most once per minute.")]
+    public static partial void TooManyInvalidSignIns(this ILogger logger, string ipAddress);
 }

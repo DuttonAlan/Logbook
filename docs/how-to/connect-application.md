@@ -73,11 +73,10 @@ dotnet run --urls http://localhost:5199
 curl http://localhost:5199/
 ```
 
-Log Events are sent at the latest after 2 seconds. Search for this one with the admin key:
+Log Events are sent at the latest after 2 seconds. Find this one in the [web interface](explore-logs.md), or [sign in with a script](configure-sign-in.md#scripts) and search for it:
 
 ```sh
-curl -G "$LOGBOOK_URL/api/v1/logs" \
-  -H "Authorization: Bearer $LOGBOOK_ADMIN_KEY" \
+curl --cookie cookies.txt -G "$LOGBOOK_URL/api/v1/logs" \
   --data-urlencode "text=placed"
 ```
 

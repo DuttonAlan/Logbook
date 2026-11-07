@@ -53,9 +53,8 @@ public sealed class ProblemDetailsExceptionHandler(IProblemDetailsService proble
 
             ServiceBusyException => (StatusCodes.Status503ServiceUnavailable, exception.Message),
 
-            // The database cannot be reached right now, so the request can be sent again later. EF Core wraps this
-            // exception, e.g. in an InvalidOperationException, so the inner exception counts. The message stays hidden.
-            NpgsqlException { IsTransient: true } or { InnerException: NpgsqlException { IsTransient: true } }
+            // The database cannot be reached right now, so the request can be sent again later. The message stays hidden.
+            _ when IsDatabaseUnavailable(exception)
                 => (StatusCodes.Status503ServiceUnavailable, "The database is not available. Send the request again later."),
             _ => (0, null)
         };
@@ -82,5 +81,22 @@ public sealed class ProblemDetailsExceptionHandler(IProblemDetailsService proble
                 Detail = detail
             }
         });
+    }
+
+    /// <summary>
+    ///     Looks through the inner exceptions, as the failure is wrapped: by EF Core in an InvalidOperationException, and
+    ///     that again in a CryptographicException when the keys of the sessions are read from the database.
+    /// </summary>
+    private static bool IsDatabaseUnavailable(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is NpgsqlException { IsTransient: true })
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

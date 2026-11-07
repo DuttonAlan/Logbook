@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, Outlet } from '@tanstack/react-router'
-import { clearAdminKey } from '../auth/adminKey.ts'
+import { useSyncExternalStore } from 'react'
+import { signOut } from '../api/auth.ts'
+import { getSession, subscribeToSession } from '../auth/session.ts'
 
 interface HealthResponse {
   status: 'Healthy' | 'Degraded' | 'Unhealthy'
@@ -33,6 +35,8 @@ function ServerStatus() {
 }
 
 export function Layout() {
+  const userName = useSyncExternalStore(subscribeToSession, () => getSession()?.userName)
+
   return (
     <div className="app">
       <header className="topbar">
@@ -47,8 +51,9 @@ export function Layout() {
         </nav>
         <div className="topbar-end">
           <ServerStatus />
-          <button type="button" className="button small quiet" onClick={clearAdminKey}>
-            Forget admin key
+          {userName && <span className="hint">{userName}</span>}
+          <button type="button" className="button small quiet" onClick={() => void signOut()}>
+            Sign out
           </button>
         </div>
       </header>

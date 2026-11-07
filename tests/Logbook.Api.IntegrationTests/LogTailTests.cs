@@ -54,7 +54,7 @@ public sealed class LogTailTests(LogbookApiFactory factory) : IClassFixture<Logb
     }
 
     [Fact]
-    public async Task Stream_WithoutAdminKey_IsUnauthorized()
+    public async Task Stream_WithoutSession_IsUnauthorized()
     {
         using var client = factory.CreateClient();
 
@@ -178,8 +178,7 @@ public sealed class LogTailTests(LogbookApiFactory factory) : IClassFixture<Logb
     public async Task Stream_Ends_WhenTheServerStops_SoItDoesNotHoldUpTheShutdown()
     {
         using var server = factory.WithWebHostBuilder(_ => { });
-        using var client = server.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", LogbookApiFactory.AdminKey);
+        using var client = server.CreateAdminClient();
 
         await using var stream = await OpenAsync(client, string.Empty);
         await stream.ReadAsync();
@@ -187,6 +186,21 @@ public sealed class LogTailTests(LogbookApiFactory factory) : IClassFixture<Logb
         server.Services.GetRequiredService<IHostApplicationLifetime>().StopApplication();
 
         await stream.WaitForEndAsync();
+    }
+
+    [Fact]
+    public async Task Stream_Ends_WhenTheSessionExpires()
+    {
+        using var server = factory.WithWebHostBuilder(builder => builder.UseSetting("SignIn:SessionLifetime", "00:00:02"));
+        using var client = server.CreateAdminClient();
+
+        await using var stream = await OpenAsync(client, string.Empty);
+        await stream.ReadAsync();
+
+        await stream.WaitForEndAsync();
+
+        using var again = await client.GetAsync(Endpoint, HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, again.StatusCode);
     }
 
     [Fact]

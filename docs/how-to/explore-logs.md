@@ -5,9 +5,9 @@ The web interface is where you read your logs: search them, look into a single L
 ## Prerequisites
 
 - A running Logbook with some Log Events, e.g. from [Getting started](../tutorials/getting-started.md) or an application you have [connected](connect-application.md).
-- The admin key from the setting [`AdminApi:Key`](../reference/configuration.md#server). The web interface asks for it once per tab, and forgets it when you close the tab or choose *Forget admin key*. Sign-in replaces it in milestone M4.
+- A way to [sign in](configure-sign-in.md). Your session ends when you choose *Sign out*, when you close the browser, and at the latest after [`SignIn:SessionLifetime`](../reference/configuration.md#sign-in), by default 12 hours.
 
-Only open the web interface over HTTPS outside your own computer, as the admin key and your logs travel with every request.
+Only open the web interface over HTTPS outside your own computer, as your password and your logs travel over the connection.
 
 ## Find Log Events
 
@@ -22,7 +22,7 @@ The list shows the newest Log Events first and loads more as you scroll. All fil
 | Environment | Compared exactly, e.g. `Production`. The field suggests the Environments in what you have seen so far. |
 | Property | A [top-level property](../reference/log-api.md#property-filters), as `Name=Value`, e.g. `OrderId=42`. Add several to require all of them. |
 
-The filters are part of the address, so you can reload the page or send the link to a colleague, who needs the admin key to open it. *Refresh* searches again from now.
+The filters are part of the address, so you can reload the page or send the link to a colleague, who has to sign in to open it. *Refresh* searches again from now.
 
 Times are shown in the time zone of your browser. Hover over a time to see the full date.
 

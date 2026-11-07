@@ -28,6 +28,11 @@ public sealed class RateLimitOptionsValidator : IValidateOptions<RateLimitOption
             failures.Add($"'{RateLimitOptions.SectionName}:{nameof(RateLimitOptions.InvalidApiKeyPermitsPerMinute)}' must be between 1 and {RateLimitOptions.MaxPermitsPerMinute}.");
         }
 
+        if (options.InvalidSignInPermitsPerMinute is < 1 or > RateLimitOptions.MaxPermitsPerMinute)
+        {
+            failures.Add($"'{RateLimitOptions.SectionName}:{nameof(RateLimitOptions.InvalidSignInPermitsPerMinute)}' must be between 1 and {RateLimitOptions.MaxPermitsPerMinute}.");
+        }
+
         return failures.Count > 0 ? ValidateOptionsResult.Fail(failures) : ValidateOptionsResult.Success;
     }
 }

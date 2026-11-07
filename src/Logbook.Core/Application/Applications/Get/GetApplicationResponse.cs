@@ -11,10 +11,14 @@ namespace Logbook.Core.Application.Applications.Get;
 /// <param name="Name" example="Shop Web App">Display Name of the Application.</param>
 /// <param name="ApiKeys">API Keys of the Application, including expired and revoked ones. Only metadata, never the API Key itself.</param>
 /// <param name="CreatedAt">Point in time (UTC) when the Application was created.</param>
-/// <param name="ModifiedAt">Point in time (UTC) when the Application was last renamed, or null if it never was.</param>
+/// <param name="ModifiedAt">Point in time (UTC) when the Application was last changed, or null if it never was.</param>
+/// <param name="RetentionDays" example="14">Days to keep Log Events set for this Application, or null if it uses the default of the server.</param>
+/// <param name="EffectiveRetentionDays" example="14">Days its Log Events are kept: <c>RetentionDays</c>, or else the default of the server.</param>
 public sealed record GetApplicationResponse(
     Guid Id,
     string Name,
     IReadOnlyList<ApiKeyResponse> ApiKeys,
     DateTime CreatedAt,
-    DateTime? ModifiedAt);
+    DateTime? ModifiedAt,
+    int? RetentionDays,
+    int EffectiveRetentionDays);

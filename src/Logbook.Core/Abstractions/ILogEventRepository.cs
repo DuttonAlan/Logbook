@@ -30,6 +30,35 @@ public interface ILogEventRepository
     public Task<long> DeleteByApplication(Guid applicationId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Deletes the expired Log Events of an Application, in several steps. If it is interrupted, calling it again
+    ///     finishes it.
+    /// </summary>
+    /// <remarks>
+    ///     Each step reads the retention of the Application and holds it until its Log Events are deleted, so that a
+    ///     retention raised in the meantime applies to everything that has not been deleted yet.
+    /// </remarks>
+    /// <param name="applicationId">Id of the Application. Nothing is deleted if it no longer exists.</param>
+    /// <param name="defaultRetentionDays">The days to keep Log Events, if the Application has no retention of its own.</param>
+    /// <param name="now">The current point in time (UTC).</param>
+    /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
+    /// <returns>The number of deleted Log Events.</returns>
+    public Task<long> DeleteExpired(Guid applicationId, int defaultRetentionDays, DateTime now, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Drops the partition of the oldest day that has expired for all Applications, with the Log Events in it. One at a
+    ///     time, so that the lock on the table of all Log Events is released in between.
+    /// </summary>
+    /// <remarks>
+    ///     This reads the retention of all Applications and holds it until the partition is dropped, so that a retention
+    ///     raised in the meantime applies to everything that has not been dropped yet.
+    /// </remarks>
+    /// <param name="defaultRetentionDays">The days to keep Log Events of an Application without a retention of its own.</param>
+    /// <param name="now">The current point in time (UTC).</param>
+    /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
+    /// <returns>The day of the dropped partition, or null if no partition has expired.</returns>
+    public Task<DateOnly?> DropOldestExpiredPartition(int defaultRetentionDays, DateTime now, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Searches Log Events, newest first.
     /// </summary>
     /// <param name="filter">The filters to apply.</param>

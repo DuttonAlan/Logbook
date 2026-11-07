@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for license information.
 
 using Logbook.Core.Application.Applications;
+using Logbook.Core.Application.Applications.ChangeRetention;
 using Logbook.Core.Application.Applications.Create;
 using Logbook.Core.Application.Applications.Delete;
 using Logbook.Core.Application.Applications.Get;
@@ -10,6 +11,7 @@ using Logbook.Core.Application.Applications.GetAll;
 using Logbook.Core.Application.Applications.IssueApiKey;
 using Logbook.Core.Application.Applications.Rename;
 using Logbook.Core.Application.Applications.RevokeApiKey;
+using Logbook.Core.Application.LogEvents.ApplyRetention;
 using Logbook.Core.Application.LogEvents.AuthenticateApiKey;
 using Logbook.Core.Application.LogEvents.Ingest;
 using Logbook.Core.Application.LogEvents.Search;
@@ -36,6 +38,7 @@ public static class ServiceCollectionExtensions
     {
         serviceCollection.AddTransient<ApiKeyIssuer>();
 
+        serviceCollection.AddTransient<ChangeRetentionService>();
         serviceCollection.AddTransient<CreateApplicationService>();
         serviceCollection.AddTransient<DeleteApplicationService>();
         serviceCollection.AddTransient<GetAllApplicationsService>();
@@ -44,6 +47,7 @@ public static class ServiceCollectionExtensions
         serviceCollection.AddTransient<RenameApplicationService>();
         serviceCollection.AddTransient<RevokeApiKeyService>();
 
+        serviceCollection.AddTransient<ApplyRetentionService>();
         serviceCollection.AddTransient<AuthenticateApiKeyService>();
         serviceCollection.AddTransient<IngestLogEventsService>();
         serviceCollection.AddTransient<SearchLogEventsService>();

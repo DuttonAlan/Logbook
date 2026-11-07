@@ -22,6 +22,16 @@ public sealed class Application
     /// </summary>
     public const int NameMaxLength = 100;
 
+    /// <summary>
+    ///     Shortest retention an Application can have, in days.
+    /// </summary>
+    public const int MinRetentionDays = 1;
+
+    /// <summary>
+    ///     Longest retention an Application can have, in days.
+    /// </summary>
+    public const int MaxRetentionDays = 3650;
+
     private readonly List<ApiKey> _apiKeys = [];
 
     /// <summary>
@@ -42,6 +52,12 @@ public sealed class Application
     public string Name { get; private set; } = null!;
 
     /// <summary>
+    ///     Days to keep the Log Events of the Application, or <see langword="null"/> to use the default of the server. Set
+    ///     via <see cref="ChangeRetention(int?, DateTime)"/>.
+    /// </summary>
+    public int? RetentionDays { get; private set; }
+
+    /// <summary>
     ///     API Keys of the Application, including expired and revoked ones.
     /// </summary>
     public IReadOnlyCollection<ApiKey> ApiKeys => _apiKeys;
@@ -52,7 +68,7 @@ public sealed class Application
     public DateTime CreatedAt { get; private set; }
 
     /// <summary>
-    ///     Point in time (UTC) when the Application was last renamed, or <see langword="null"/> if it never was.
+    ///     Point in time (UTC) when the Application was last changed, or <see langword="null"/> if it never was.
     /// </summary>
     public DateTime? ModifiedAt { get; private set; }
 
@@ -94,6 +110,33 @@ public sealed class Application
         }
 
         Name = normalized;
+        ModifiedAt = now;
+    }
+
+    /// <summary>
+    ///     Changes how long the Log Events of the Application are kept. Does nothing if it stays the same.
+    /// </summary>
+    /// <param name="retentionDays">Days to keep Log Events, or <see langword="null"/> to use the default of the server.</param>
+    /// <param name="now">The current point in time (UTC), used as the modification time.</param>
+    /// <exception cref="DomainValidationException">Thrown when the retention is out of range.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="now"/> is not in UTC.</exception>
+    public void ChangeRetention(int? retentionDays, DateTime now)
+    {
+        UtcGuard.EnsureUtc(now);
+
+        if (retentionDays is < MinRetentionDays or > MaxRetentionDays)
+        {
+            throw new DomainValidationException(
+                $"The retention must be between {MinRetentionDays} and {MaxRetentionDays} days.",
+                nameof(retentionDays));
+        }
+
+        if (retentionDays == RetentionDays)
+        {
+            return;
+        }
+
+        RetentionDays = retentionDays;
         ModifiedAt = now;
     }
 

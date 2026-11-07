@@ -3,6 +3,9 @@
 // See the LICENSE file in the project root for license information.
 
 using Logbook.Core.Abstractions;
+using Logbook.Core.Application.LogEvents;
+
+using Microsoft.Extensions.Options;
 
 namespace Logbook.Core.Application.Applications.Get;
 
@@ -11,9 +14,11 @@ namespace Logbook.Core.Application.Applications.Get;
 /// </summary>
 /// <param name="applicationRepository">An Instance of a IApplicationRepository to get an Application.</param>
 /// <param name="timeProvider">The TimeProvider to decide whether API Keys are active.</param>
+/// <param name="retentionOptions">The default retention.</param>
 public sealed class GetApplicationService(
     IApplicationRepository applicationRepository,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    IOptions<RetentionOptions> retentionOptions)
 {
     /// <summary>
     ///     Gets an Application based on the Id, including the metadata of its API Keys.
@@ -50,6 +55,8 @@ public sealed class GetApplicationService(
             application.Name,
             apiKeys,
             application.CreatedAt,
-            application.ModifiedAt);
+            application.ModifiedAt,
+            application.RetentionDays,
+            application.RetentionDays ?? retentionOptions.Value.DefaultDays);
     }
 }

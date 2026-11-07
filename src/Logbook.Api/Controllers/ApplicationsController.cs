@@ -4,6 +4,7 @@
 
 using Logbook.Api.Authorization;
 using Logbook.Core.Application.Applications;
+using Logbook.Core.Application.Applications.ChangeRetention;
 using Logbook.Core.Application.Applications.Create;
 using Logbook.Core.Application.Applications.Delete;
 using Logbook.Core.Application.Applications.Get;
@@ -25,6 +26,7 @@ namespace Logbook.Api.Controllers;
 ///     The actions deliberately have no <see cref="ConsumesAttribute"/>: routing would skip an action for another
 ///     content type, so the request would end in the catch-all for unknown API routes and return 404 instead of 415.
 /// </remarks>
+/// <param name="changeRetentionService">The Service to change the retention of an Application.</param>
 /// <param name="createApplicationService">The Service to create an Application.</param>
 /// <param name="deleteApplicationService">The Service to delete an Application.</param>
 /// <param name="getAllApplicationsService">The Service to get all Applications.</param>
@@ -37,6 +39,7 @@ namespace Logbook.Api.Controllers;
 [Route("api/v1/applications")]
 [Tags("Applications")]
 public sealed class ApplicationsController(
+    ChangeRetentionService changeRetentionService,
     CreateApplicationService createApplicationService,
     DeleteApplicationService deleteApplicationService,
     GetAllApplicationsService getAllApplicationsService,
@@ -187,6 +190,40 @@ public sealed class ApplicationsController(
         CancellationToken cancellationToken)
     {
         await renameApplicationService.ExecuteAsync(id, request, cancellationToken);
+
+        return NoContent();
+    }
+
+    /// <summary>
+    ///     Changes how long the Log Events of the Application are kept.
+    /// </summary>
+    /// <remarks>
+    ///     Log Events past the new retention are removed by the next retention run, and cannot be recovered. Without
+    ///     <c>retentionDays</c>, the Application uses the setting <c>Retention:DefaultDays</c>.
+    /// </remarks>
+    /// <param name="id" example="0199d1a2-7c3e-7b4a-9f10-5c963f66afa6">Id of the Application.</param>
+    /// <param name="request">The request with the retention.</param>
+    /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
+    /// <returns>204 No Content once the retention is changed.</returns>
+    /// <response code="204">Responds with no content once the retention was changed.</response>
+    /// <response code="400">Responds with validation problem details if the retention is out of range.</response>
+    /// <response code="404">Responds with problem details if no Application with the given Id exists.</response>
+    /// <response code="415">Responds with problem details if the request body is not JSON.</response>
+    /// <response code="500">Responds with problem details if an unexpected error occurred.</response>
+    /// <response code="503">Responds with problem details and a Retry-After header if the database cannot be reached.</response>
+    [HttpPut("{id:guid}/retention")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status415UnsupportedMediaType, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json")]
+    public async Task<IActionResult> ChangeRetention(
+        Guid id,
+        ChangeRetentionRequest request,
+        CancellationToken cancellationToken)
+    {
+        await changeRetentionService.ExecuteAsync(id, request, cancellationToken);
 
         return NoContent();
     }

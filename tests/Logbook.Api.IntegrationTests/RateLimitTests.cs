@@ -309,8 +309,7 @@ public sealed class RateLimitTests(LogbookApiFactory factory) : IClassFixture<Lo
     public async Task Search_IsNotLimited()
     {
         await using var limited = WithLimit(1);
-        using var admin = limited.CreateClient();
-        admin.DefaultRequestHeaders.Authorization = new("Bearer", LogbookApiFactory.AdminKey);
+        using var admin = limited.CreateAdminClient();
 
         for (var i = 0; i < 5; i++)
         {

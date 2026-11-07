@@ -295,6 +295,16 @@ pre {
   width: min(24rem, 100%);
 }
 
+.gate-form .button {
+  text-align: center;
+}
+
+.gate-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
 .gate-form h1 {
   display: flex;
   align-items: center;

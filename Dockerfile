@@ -34,7 +34,9 @@ COPY src/Logbook.Core/ src/Logbook.Core/
 COPY src/Logbook.Infrastructure/ src/Logbook.Infrastructure/
 # The web interface is served by the Api from wwwroot.
 COPY --from=web /web/dist/ src/Logbook.Api/wwwroot/
-RUN dotnet publish src/Logbook.Api/Logbook.Api.csproj --configuration Release --no-restore --output /app/publish /p:UseAppHost=false
+# The release workflow passes the version from the tag, which /health/details reports.
+ARG VERSION=0.1.0
+RUN dotnet publish src/Logbook.Api/Logbook.Api.csproj --configuration Release --no-restore --output /app/publish /p:UseAppHost=false /p:Version=${VERSION}
 
 FROM build AS bundle
 ARG DOTNET_EF_VERSION=10.0.13

@@ -151,6 +151,68 @@ public sealed class LogEventRepository(LogbookContext context) : ILogEventReposi
         return total;
     }
 
+    /// <inheritdoc/>
+    public async Task<long> DeleteExpired(Guid applicationId, int defaultRetentionDays, DateTime now, CancellationToken cancellationToken = default)
+    {
+        var total = 0L;
+        int deleted;
+
+        do
+        {
+            await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+
+            // FOR SHARE, as a change of the retention then waits for this step, and the next step reads the new value.
+            var retention = await context.Database
+                .SqlQuery<int?>($"""SELECT "RetentionDays" AS "Value" FROM config.applications WHERE "Id" = {applicationId} FOR SHARE""")
+                .ToListAsync(cancellationToken);
+
+            if (retention.Count == 0)
+            {
+                return total;
+            }
+
+            var before = now.AddDays(-(retention[0] ?? defaultRetentionDays));
+
+            deleted = await context.LogEvents
+                .Where(logEvent => logEvent.ApplicationId == applicationId && logEvent.Timestamp < before)
+                .Take(DeleteBatchSize)
+                .ExecuteDeleteAsync(cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+
+            total += deleted;
+        }
+        while (deleted == DeleteBatchSize);
+
+        return total;
+    }
+
+    /// <inheritdoc/>
+    public async Task<DateOnly?> DropOldestExpiredPartition(int defaultRetentionDays, DateTime now, CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+
+        // FOR SHARE, as a change of a retention then waits for this drop, and the next one reads the new value. A new
+        // Application is not held up, and has no old Log Events to lose.
+        var retentions = await context.Database
+            .SqlQuery<int?>($"""SELECT "RetentionDays" AS "Value" FROM config.applications FOR SHARE""")
+            .ToListAsync(cancellationToken);
+
+        var longestDays = retentions.Count > 0
+            ? retentions.Max(days => days ?? defaultRetentionDays)
+            : defaultRetentionDays;
+
+        var firstDayToKeep = DateOnly.FromDateTime(now.AddDays(-longestDays));
+
+        var dropped = await context.Database
+            .SqlQuery<DateOnly?>($"""SELECT telemetry.drop_oldest_log_event_partition_before({firstDayToKeep}) AS "Value" """)
+            .ToListAsync(cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return dropped[0];
+    }
+
     private static IQueryable<LogEvent> ApplyFilter(IQueryable<LogEvent> query, LogEventFilter filter)
     {
         if (filter.From is { } from)

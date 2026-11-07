@@ -7,8 +7,10 @@ using Logbook.Infrastructure.HealthChecks;
 using Logbook.Infrastructure.Ingestion;
 using Logbook.Infrastructure.Persistence;
 using Logbook.Infrastructure.Persistence.Repositories;
+using Logbook.Infrastructure.Retention;
 using Logbook.Infrastructure.Security;
 
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -52,6 +54,14 @@ public static class ServiceCollectionExtensions
         serviceCollection.AddSingleton<LogEventFeed>();
         serviceCollection.AddSingleton<ILogEventFeed>(services => services.GetRequiredService<LogEventFeed>());
         serviceCollection.AddHostedService<LogEventWriterService>();
+
+        serviceCollection.AddHostedService<LogEventRetentionService>();
+
+        // In the database, so that sign-in sessions survive a restart and work on every server. The fixed name keeps the
+        // keys usable when the content root changes, e.g. with a new image.
+        serviceCollection.AddDataProtection()
+            .SetApplicationName("Logbook")
+            .PersistKeysToDbContext<LogbookContext>();
 
         serviceCollection.AddSingleton<IApiKeyGenerator, ApiKeyGenerator>();
         serviceCollection.AddSingleton<IApiKeyHasher, Sha256ApiKeyHasher>();

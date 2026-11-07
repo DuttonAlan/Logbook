@@ -50,10 +50,10 @@ public sealed class LogApiAccessTests(LogbookApiFactory factory) : IClassFixture
     }
 
     [Fact]
-    public async Task RequestWithAdminKey_IsUnauthorized()
+    public async Task RequestWithSession_IsUnauthorized()
     {
         using var client = factory.CreateAdminClient();
-        client.DefaultRequestHeaders.Add(KeyHeader, LogbookApiFactory.AdminKey);
+        client.DefaultRequestHeaders.Add(KeyHeader, LogbookApiFactory.AdminPassword);
         using var content = LogEventBodies.Json(LogEventBodies.Valid());
 
         using var response = await client.PostAsync(Endpoint, content, TestContext.Current.CancellationToken);

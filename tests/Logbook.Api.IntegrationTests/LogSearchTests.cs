@@ -54,14 +54,13 @@ public sealed class LogSearchTests(LogbookApiFactory factory) : IClassFixture<Lo
     }
 
     [Fact]
-    public async Task Search_WithoutAdminKey_IsUnauthorized()
+    public async Task Search_WithoutSession_IsUnauthorized()
     {
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync(Endpoint, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        Assert.Equal("Bearer", response.Headers.WwwAuthenticate.ToString());
     }
 
     [Fact]

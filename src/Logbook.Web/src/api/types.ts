@@ -55,6 +55,8 @@ export interface ApiKey {
 export interface Application extends ApplicationSummary {
   apiKeys: ApiKey[]
   modifiedAt: string | null
+  retentionDays: number | null
+  effectiveRetentionDays: number
 }
 
 export interface IssuedApiKey {
