@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for license information.
 
 using Logbook.Core.Domain.Entities;
+using Logbook.Core.Domain.ValueObjects;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -54,6 +55,9 @@ public sealed class LogEventConfiguration : IEntityTypeConfiguration<LogEvent>
         builder.Property(x => x.Properties)
             .HasColumnType("jsonb");
 
+        builder.Property(x => x.ExceptionFingerprint)
+            .HasMaxLength(ExceptionFingerprint.Length);
+
         // jsonb_path_ops supports searching by containment (@>) with a smaller and faster index than the default.
         builder.HasIndex(x => x.Properties)
             .HasMethod("gin")
@@ -72,6 +76,15 @@ public sealed class LogEventConfiguration : IEntityTypeConfiguration<LogEvent>
         // Filtered, as a trace is only ever looked up by its Id, and many Log Events have none.
         builder.HasIndex(x => new { x.TraceId, x.Timestamp, x.Id })
             .HasFilter("\"TraceId\" IS NOT NULL");
+
+        // Filtered, as only few Log Events have an exception. This one lists the groups of a time range.
+        builder.HasIndex(x => new { x.Timestamp, x.ApplicationId, x.ExceptionFingerprint })
+            .HasDatabaseName("IX_log_events_Timestamp_ExceptionGroup")
+            .HasFilter("\"ExceptionFingerprint\" IS NOT NULL");
+
+        // This one finds the occurrences of a group.
+        builder.HasIndex(x => new { x.ExceptionFingerprint, x.Timestamp, x.Id })
+            .HasFilter("\"ExceptionFingerprint\" IS NOT NULL");
 
         // 3 is LogEventLevel.Warning. These levels are rare but what people look for, and the index stays very small.
         builder.HasIndex(x => new { x.Timestamp, x.Id })

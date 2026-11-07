@@ -104,12 +104,12 @@ Every Log Event belongs to an **Application**, which the server takes from the A
 - [x] Retention per Application: a background service drops expired partitions
 - [x] How-to guides: deploy to production, configure a reverse proxy, upgrade, back up and restore
 
-## M5: Application Insights-style telemetry
+## M5: Application Insights-style telemetry ✅
 
-- [ ] `Logbook.AspNetCore`: track **requests** (route, status, duration)
-- [ ] **Dependencies**: `HttpClient` automatically, SQL optionally
-- [ ] **Exceptions**: grouped by type and stack fingerprint, with counts and first and last occurrence
-- [ ] **Transactions**: request, dependencies and Log Events of one trace on one timeline
+- [x] `Logbook.AspNetCore`: track **requests** (route, status, duration)
+- [x] **Dependencies**: `HttpClient` automatically, SQL optionally (drivers with an `ActivitySource`, not yet Microsoft.Data.SqlClient)
+- [x] **Exceptions**: grouped by type and stack fingerprint, with counts and first and last occurrence
+- [x] **Transactions**: request, dependencies and Log Events of one trace on one timeline
 
 ## M6: Dashboards and metrics
 

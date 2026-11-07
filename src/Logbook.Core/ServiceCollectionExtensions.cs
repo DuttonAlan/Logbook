@@ -11,11 +11,15 @@ using Logbook.Core.Application.Applications.GetAll;
 using Logbook.Core.Application.Applications.IssueApiKey;
 using Logbook.Core.Application.Applications.Rename;
 using Logbook.Core.Application.Applications.RevokeApiKey;
+using Logbook.Core.Application.ExceptionGroups.Search;
 using Logbook.Core.Application.LogEvents.ApplyRetention;
 using Logbook.Core.Application.LogEvents.AuthenticateApiKey;
 using Logbook.Core.Application.LogEvents.Ingest;
 using Logbook.Core.Application.LogEvents.Search;
 using Logbook.Core.Application.LogEvents.Tail;
+using Logbook.Core.Application.Spans.Ingest;
+using Logbook.Core.Application.Spans.Search;
+using Logbook.Core.Application.Traces.Get;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -52,6 +56,11 @@ public static class ServiceCollectionExtensions
         serviceCollection.AddTransient<IngestLogEventsService>();
         serviceCollection.AddTransient<SearchLogEventsService>();
         serviceCollection.AddTransient<TailLogEventsService>();
+
+        serviceCollection.AddTransient<IngestSpansService>();
+        serviceCollection.AddTransient<SearchSpansService>();
+        serviceCollection.AddTransient<GetTraceService>();
+        serviceCollection.AddTransient<SearchExceptionGroupsService>();
 
         return serviceCollection;
     }

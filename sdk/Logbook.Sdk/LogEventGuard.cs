@@ -96,8 +96,7 @@ internal static class LogEventGuard
     {
         guarded = null;
 
-        if (logEvent.Timestamp < now - limits.MaxEventAge + MarginWithin(limits.MaxEventAge)
-            || logEvent.Timestamp > now + limits.MaxFutureOffset - MarginWithin(limits.MaxFutureOffset))
+        if (IsOutsideTimeWindow(logEvent.Timestamp, limits, now))
         {
             return LogEventGuardResult.Expired;
         }
@@ -143,6 +142,38 @@ internal static class LogEventGuard
         guarded = WithContent(logEvent, message, template, exception, properties, isTruncated: true);
 
         return LogEventGuardResult.Truncated;
+    }
+
+    /// <summary>
+    ///     Checks a timestamp against the time window of the server, with a margin for clocks that differ.
+    /// </summary>
+    /// <param name="timestamp">The timestamp.</param>
+    /// <param name="limits">The limits of the server.</param>
+    /// <param name="now">The current time.</param>
+    /// <returns><see langword="true"/> if the server could reject it.</returns>
+    public static bool IsOutsideTimeWindow(DateTimeOffset timestamp, LogEventLimits limits, DateTimeOffset now)
+    {
+        return timestamp < now - limits.MaxEventAge + MarginWithin(limits.MaxEventAge)
+            || timestamp > now + limits.MaxFutureOffset - MarginWithin(limits.MaxFutureOffset);
+    }
+
+    /// <summary>
+    ///     Cuts text at a limit, without leaving half of a surrogate pair.
+    /// </summary>
+    /// <param name="text">The text.</param>
+    /// <param name="maxLength">The limit.</param>
+    /// <returns>The text, cut if necessary.</returns>
+    public static string Cut(string text, int maxLength)
+    {
+        if (text.Length <= maxLength)
+        {
+            return text;
+        }
+
+        // Half of a surrogate pair is not valid text, and the server would reject it.
+        var length = char.IsHighSurrogate(text[maxLength - 1]) ? maxLength - 1 : maxLength;
+
+        return text.Substring(0, length);
     }
 
     private static TimeSpan MarginWithin(TimeSpan window)
@@ -273,19 +304,6 @@ internal static class LogEventGuard
     }
 
     private static string? CutOptional(string? text, int maxLength) => text is null ? null : Cut(text, maxLength);
-
-    private static string Cut(string text, int maxLength)
-    {
-        if (text.Length <= maxLength)
-        {
-            return text;
-        }
-
-        // Half of a surrogate pair is not valid text, and the server would reject it.
-        var length = char.IsHighSurrogate(text[maxLength - 1]) ? maxLength - 1 : maxLength;
-
-        return text.Substring(0, length);
-    }
 
     private static string MarkOnlyObject() => $"{{\"{TruncatedProperty}\":true}}";
 

@@ -14,10 +14,11 @@ namespace Logbook.Sdk;
 ///     <c>Channel&lt;T&gt;</c> cannot do this, because an event that was read from it is gone. The lock is only held for
 ///     short operations without any I/O, so adding an event does not make the host application wait.
 /// </remarks>
-internal sealed class LogEventBuffer
+internal sealed class TelemetryBuffer<T>
+    where T : ITelemetryItem
 {
     private readonly object _lock = new();
-    private readonly Queue<BufferedEvent> _events = new();
+    private readonly Queue<BufferedItem<T>> _events = new();
     private readonly int _maxCount;
     private readonly long _maxBytes;
     private readonly int _batchCount;
@@ -38,7 +39,7 @@ internal sealed class LogEventBuffer
     /// <param name="batchCount">Number of events at which a batch is due without waiting.</param>
     /// <param name="batchBytes">Memory of the events at which a batch is due without waiting.</param>
     /// <param name="timeProvider">The clock to measure how long events have waited.</param>
-    public LogEventBuffer(int maxCount, long maxBytes, int batchCount, long batchBytes, TimeProvider timeProvider)
+    public TelemetryBuffer(int maxCount, long maxBytes, int batchCount, long batchBytes, TimeProvider timeProvider)
     {
         _maxCount = maxCount;
         _maxBytes = maxBytes;
@@ -95,10 +96,10 @@ internal sealed class LogEventBuffer
     ///     Adds an event, dropping the oldest events if a limit is reached. An event that alone is larger than the memory
     ///     limit is dropped itself, as it could never fit and should not cost the others their place.
     /// </summary>
-    /// <param name="logEvent">The event.</param>
-    public void Add(LogbookEvent logEvent)
+    /// <param name="item">The event.</param>
+    public void Add(T item)
     {
-        var bytes = logEvent.GetMemoryBytes();
+        var bytes = item.GetMemoryBytes();
         var enqueuedAt = _timeProvider.GetTimestamp();
 
         lock (_lock)
@@ -117,7 +118,7 @@ internal sealed class LogEventBuffer
                 _unreportedFullCount++;
             }
 
-            _events.Enqueue(new BufferedEvent(logEvent, ++_lastSequence, bytes, enqueuedAt));
+            _events.Enqueue(new BufferedItem<T>(item, ++_lastSequence, bytes, enqueuedAt));
             _bytes += bytes;
 
             // The sender needs to know when its timer has to start, and when it does not have to wait any longer.
@@ -168,20 +169,20 @@ internal sealed class LogEventBuffer
     /// </summary>
     /// <param name="maxCount">Maximum number of events to return.</param>
     /// <returns>The events, oldest first.</returns>
-    public IReadOnlyList<BufferedEvent> Peek(int maxCount)
+    public IReadOnlyList<BufferedItem<T>> Peek(int maxCount)
     {
         lock (_lock)
         {
-            var events = new List<BufferedEvent>(Math.Min(maxCount, _events.Count));
+            var events = new List<BufferedItem<T>>(Math.Min(maxCount, _events.Count));
 
-            foreach (var bufferedEvent in _events)
+            foreach (var bufferedItem in _events)
             {
                 if (events.Count == maxCount)
                 {
                     break;
                 }
 
-                events.Add(bufferedEvent);
+                events.Add(bufferedItem);
             }
 
             return events;

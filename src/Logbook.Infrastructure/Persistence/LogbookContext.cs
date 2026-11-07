@@ -28,6 +28,11 @@ public sealed class LogbookContext(DbContextOptions<LogbookContext> options) : D
     /// </summary>
     public DbSet<LogEvent> LogEvents => Set<LogEvent>();
 
+    /// <summary>
+    ///     The Spans Table, partitioned by day.
+    /// </summary>
+    public DbSet<TraceSpan> Spans => Set<TraceSpan>();
+
     /// <inheritdoc/>
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 

@@ -22,6 +22,7 @@ Start here if you are new to Logbook.
 - [Run Logbook from source](how-to/run-from-source.md)
 - [Manage Applications and API Keys](how-to/manage-applications.md)
 - [Connect an application](how-to/connect-application.md)
+- [Track requests and dependencies](how-to/track-requests.md)
 - [Search and follow logs](how-to/explore-logs.md)
 - [Configure sign-in](how-to/configure-sign-in.md)
 - [Deploy to production](how-to/deploy-production.md)
@@ -34,6 +35,7 @@ Start here if you are new to Logbook.
 - [Configuration](reference/configuration.md): every setting, its default and its limits
 - [Admin API](reference/admin-api.md): sign in, manage Applications and API Keys
 - [Log API](reference/log-api.md): send, search and follow Log Events
+- [Telemetry API](reference/telemetry-api.md): spans, transactions and groups of exceptions
 - [SDK behavior](reference/sdk-behavior.md): retries, limits, shutdown and diagnostics of the SDK
 - [Health checks](reference/health-checks.md)
 
@@ -43,4 +45,4 @@ Start here if you are new to Logbook.
 
 ## Terms
 
-Logbook capitalizes the names of its own objects (Application, API Key, Log Event) to tell them apart from the everyday words. An *Application* is a program that sends its logs to Logbook; a *Log Event* is one entry it sends.
+Logbook capitalizes the names of its own objects (Application, API Key, Log Event) to tell them apart from the everyday words. An *Application* is a program that sends its logs to Logbook; a *Log Event* is one entry it sends. A *span* is one measured operation of an Application: a request it received or a dependency it called, and a *transaction* is everything stored for one trace.

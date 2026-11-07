@@ -3,9 +3,7 @@ name: Release
 # Publishes a release when a version tag is pushed, e.g. v1.0.0, after the tests have passed:
 #   ghcr.io/<owner>/logbook:1.0.0           the server with the web interface
 #   ghcr.io/<owner>/logbook-migrator:1.0.0  the database migrations
-#   Logbook.Sdk and Logbook.Extensions.Logging on NuGet, which needs the repository secret NUGET_API_KEY
-#
-# Logbook.AspNetCore has no code yet (milestone M5), so it is not published.
+#   Logbook.Sdk, Logbook.Extensions.Logging and Logbook.AspNetCore on NuGet, which needs the repository secret NUGET_API_KEY
 
 on:
   push:
@@ -103,7 +101,7 @@ jobs:
       - name: Pack
         run: |
           version="${GITHUB_REF_NAME#v}"
-          for project in sdk/Logbook.Sdk sdk/Logbook.Extensions.Logging; do
+          for project in sdk/Logbook.Sdk sdk/Logbook.Extensions.Logging sdk/Logbook.AspNetCore; do
             dotnet pack "$project" --configuration Release --output artifacts/packages -p:Version="$version"
           done
 

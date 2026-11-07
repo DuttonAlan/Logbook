@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { LOG_LEVELS, type ApplicationSummary, type LogLevel } from '../../api/types.ts'
 import { fromLocalInput, toLocalInput } from '../../lib/format.ts'
+import { useDebouncedValue } from '../../lib/useDebouncedValue.ts'
 import { DEFAULT_TIME_RANGE, MAX_PROPERTY_FILTERS, TIME_RANGES, hasFilters, type LogSearch, type TimeRange } from './filters.ts'
-
-const TYPING_DELAY = 350
 
 interface FilterBarProps {
   search: LogSearch
@@ -11,32 +10,6 @@ interface FilterBarProps {
   environments: string[]
   onChange: (patch: Partial<LogSearch>, options?: { replace?: boolean }) => void
   children?: ReactNode
-}
-
-// Applies typed text after a short pause, and without an entry per keystroke in the history of the browser.
-function useDebouncedValue(value: string, apply: (value: string) => void) {
-  const [draft, setDraft] = useState(value)
-  const latestApply = useRef(apply)
-
-  // Read through a reference: the callback is new with every render, and a live tail renders more often than this delay,
-  // so restarting the timer for it would mean that it never ends.
-  useEffect(() => {
-    latestApply.current = apply
-  })
-
-  useEffect(() => setDraft(value), [value])
-
-  useEffect(() => {
-    if (draft === value) {
-      return
-    }
-
-    const timer = setTimeout(() => latestApply.current(draft), TYPING_DELAY)
-
-    return () => clearTimeout(timer)
-  }, [draft, value])
-
-  return [draft, setDraft] as const
 }
 
 function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
@@ -201,9 +174,10 @@ export function FilterBar({ search, applications, environments, onChange, childr
         )}
       </div>
 
-      {(properties.length > 0 || search.trace || hasFilters(search)) && (
+      {hasFilters(search) && (
         <div className="filter-row chips">
           {search.trace && <Chip label={`Trace ${search.trace}`} onRemove={() => onChange({ trace: undefined })} />}
+          {search.exception && <Chip label={`Exception group ${search.exception}`} onRemove={() => onChange({ exception: undefined })} />}
           {properties.map((filter) => (
             <Chip
               key={filter}
@@ -218,7 +192,7 @@ export function FilterBar({ search, applications, environments, onChange, childr
           <button
             type="button"
             className="button small quiet"
-            onClick={() => onChange({ level: undefined, app: undefined, env: undefined, q: undefined, prop: undefined, trace: undefined })}
+            onClick={() => onChange({ level: undefined, app: undefined, env: undefined, q: undefined, prop: undefined, trace: undefined, exception: undefined })}
           >
             Clear all filters
           </button>

@@ -36,12 +36,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Settings `ReverseProxy:*` for running behind a reverse proxy, so that rate limits and logs see the address of the client, and cookies are marked `Secure`.
 - In the environment `Production`, Logbook refuses to start with [insecure settings](docs/reference/configuration.md#production-checks), e.g. `AllowedHosts` set to `*`, or serving other hosts over plain HTTP. A deployment that does this needs a change.
 - How-to guides: [deploy to production](docs/how-to/deploy-production.md), [configure a reverse proxy](docs/how-to/reverse-proxy.md), [configure sign-in](docs/how-to/configure-sign-in.md), [upgrade](docs/how-to/upgrade.md), [back up and restore](docs/how-to/back-up-and-restore.md).
-- The release workflow runs the tests first, and publishes `Logbook.Sdk` and `Logbook.Extensions.Logging` to NuGet, with the version from the tag. The server reports that version as well.
+- The release workflow runs the tests first, and publishes `Logbook.Sdk`, `Logbook.Extensions.Logging` and `Logbook.AspNetCore` to NuGet, with the version from the tag. The server reports that version as well.
+- Request and dependency tracking: `builder.Services.AddLogbookTelemetry()` in `Logbook.AspNetCore` sends each request with its route, status and duration, each `HttpClient` call and, optionally, SQL commands of drivers with an `ActivitySource`, such as Npgsql and MySqlConnector. Microsoft.Data.SqlClient is not supported yet. See [Track requests and dependencies](docs/how-to/track-requests.md).
+- Spans: `POST /api/v1/spans` receives requests and dependencies, and `GET /api/v1/spans` searches them, stored in the new partitioned table `telemetry.spans`. Retention and deleting an Application cover them. This requires running the migrations, and a database user with limited rights needs `SELECT`, `INSERT` and `DELETE` on `telemetry.spans`. See [Telemetry API](docs/reference/telemetry-api.md).
+- Transactions: `GET /api/v1/traces/{traceId}` returns the spans and Log Events of a trace, and the web interface shows them on a timeline.
+- Groups of exceptions: `GET /api/v1/exceptions` groups the exceptions in Log Events by type and stack fingerprint, with counts and first and last occurrence, and the web interface lists them. `GET /api/v1/logs` and its stream have the new filter `exceptionFingerprint`, and Log Events the field of that name. Log Events stored earlier have no fingerprint and are not grouped. The new indexes can take a while to create on a large table.
 
 ### Changed
 
 - `DELETE /api/v1/applications/{id}` also deletes the Log Events of the Application. A database user with limited rights now needs `DELETE` on `telemetry.log_events`.
 - Requests while the database cannot be reached return `503` with `Retry-After` instead of `500`.
+- `LogIngestion:MaxQueuedBytes`, `MaxQueueSize` and `MaxQueueBytes` now apply to Log Events and spans separately, so the memory used can reach twice the value when spans are sent.
 
 ### Fixed
 

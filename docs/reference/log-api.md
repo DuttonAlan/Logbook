@@ -130,12 +130,13 @@ Returns one page of Log Events, newest first. All parameters are optional, and a
 | `text` | Only Log Events whose message matches this [full-text search](#full-text-search). At most 500 characters. |
 | `traceId` | Only Log Events of this trace, compared exactly. At most 64 characters. |
 | `property` | Only Log Events with this [property](#property-filters), as `Name=Value`. Repeat it for several, which must all match. At most 10. |
+| `exceptionFingerprint` | Only Log Events with an exception of this [group](telemetry-api.md#find-groups-of-exceptions), compared exactly. At most 32 characters. |
 | `limit` | Maximum number of Log Events on the page, from 1 to 1000. Default: `100`. |
 | `cursor` | The `nextCursor` of the previous page. |
 
 URL-encode the values. In particular, a `+` in an offset must be sent as `%2B`, or it is read as a space and rejected.
 
-The response contains the Log Events with the fields [listed above](#send-log-events), where `properties` and `exception` are JSON objects, plus `id` and `applicationId`:
+The response contains the Log Events with the fields [listed above](#send-log-events), where `properties` and `exception` are JSON objects, plus `id`, `applicationId` and `exceptionFingerprint`, which is null without an exception:
 
 ```json
 {

@@ -245,7 +245,7 @@ public sealed class LogbookClientTests
     [Fact]
     public void TheDefaultHandler_DoesNotFollowRedirects()
     {
-        using var handler = LogEventSender.CreateDefaultHandler();
+        using var handler = LogbookClient.CreateDefaultHandler();
 
         var allowsRedirects = handler switch
         {
@@ -433,7 +433,7 @@ public sealed class LogbookClientTests
         using var enabled = CreateClient(handler);
 
         disabled.Enqueue(new LogbookEvent(_time.GetUtcNow(), LogbookLevel.Error, "ignored"));
-        enabled.Enqueue(null!);
+        enabled.Enqueue((LogbookEvent)null!);
 
         Assert.False(disabled.IsEnabled);
         Assert.Equal(0, enabled.Buffer!.Count);

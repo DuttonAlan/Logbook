@@ -7,7 +7,7 @@ namespace Logbook.Sdk;
 /// <summary>
 ///     One Log Event to send to Logbook. It never changes after it is created, so it can wait in the buffer safely.
 /// </summary>
-public sealed class LogbookEvent
+public sealed class LogbookEvent : ITelemetryItem
 {
     // Roughly the object itself, the headers of its strings, and its place in the buffer.
     private const long MemoryOverheadBytes = 512;
@@ -111,6 +111,9 @@ public sealed class LogbookEvent
     ///     Whether text of the Log Event was already cut because of a limit.
     /// </summary>
     internal bool IsTruncated { get; set; }
+
+    /// <inheritdoc/>
+    long ITelemetryItem.GetMemoryBytes() => GetMemoryBytes();
 
     /// <summary>
     ///     Estimates the memory the Log Event holds while it waits in the buffer. A string takes two bytes for each

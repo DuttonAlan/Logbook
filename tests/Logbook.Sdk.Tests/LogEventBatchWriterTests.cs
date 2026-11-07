@@ -228,7 +228,7 @@ public sealed class LogEventBatchWriterTests
         Assert.Equal(events[2].Sequence, batch.LastSequence);
     }
 
-    private static LogEventBatch Write(BufferedEvent[] events, int maxRequestBytes = int.MaxValue)
+    private static LogEventBatch Write(BufferedItem<LogbookEvent>[] events, int maxRequestBytes = int.MaxValue)
     {
         var limits = new LogEventLimits(new LogbookOptions
         {
@@ -245,9 +245,9 @@ public sealed class LogEventBatchWriterTests
         return string.Concat(Enumerable.Repeat("""{"a":""", depth - 1)) + "{}" + new string('}', depth - 1);
     }
 
-    private static BufferedEvent[] Events(params LogbookEvent[] logEvents)
+    private static BufferedItem<LogbookEvent>[] Events(params LogbookEvent[] logEvents)
     {
-        return [.. logEvents.Select((logEvent, index) => new BufferedEvent(logEvent, index + 1, logEvent.GetMemoryBytes(), 0))];
+        return [.. logEvents.Select((logEvent, index) => new BufferedItem<LogbookEvent>(logEvent, index + 1, logEvent.GetMemoryBytes(), 0))];
     }
 
     private static JsonElement Decompress(LogEventBatch batch)

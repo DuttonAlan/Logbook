@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import type { JsonValue, LogEvent } from '../../api/types.ts'
 import { CopyButton } from '../../components/CopyButton.tsx'
@@ -13,6 +14,7 @@ interface LogDetailProps {
   onClose: () => void
   onFilterProperty: (filter: string) => void
   onShowTrace: (traceId: string) => void
+  onShowOccurrences: (fingerprint: string) => void
 }
 
 type JsonObject = { [key: string]: JsonValue }
@@ -25,7 +27,7 @@ function toText(value: JsonValue | undefined): string | null {
   return typeof value === 'string' && value !== '' ? value : null
 }
 
-function ExceptionView({ exception }: { exception: JsonObject }) {
+export function ExceptionView({ exception }: { exception: JsonObject }) {
   const type = toText(exception.type)
   const message = toText(exception.message)
   const stackTrace = toText(exception.stackTrace)
@@ -122,7 +124,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-export function LogDetail({ event, applicationName, canAddPropertyFilter, onClose, onFilterProperty, onShowTrace }: LogDetailProps) {
+export function LogDetail({ event, applicationName, canAddPropertyFilter, onClose, onFilterProperty, onShowTrace, onShowOccurrences }: LogDetailProps) {
   const properties = Object.entries(event.properties ?? {})
 
   return (
@@ -159,7 +161,10 @@ export function LogDetail({ event, applicationName, canAddPropertyFilter, onClos
         </dl>
 
         {event.traceId && (
-          <p>
+          <p className="log-detail-links">
+            <Link className="button" to="/traces/$traceId" params={{ traceId: event.traceId }}>
+              Open the transaction
+            </Link>
             <button type="button" className="button" onClick={() => onShowTrace(event.traceId!)}>
               All Log Events of this trace
             </button>
@@ -170,6 +175,13 @@ export function LogDetail({ event, applicationName, canAddPropertyFilter, onClos
           <section>
             <h2>Exception</h2>
             <ExceptionView exception={event.exception} />
+            {event.exceptionFingerprint && (
+              <p>
+                <button type="button" className="button" onClick={() => onShowOccurrences(event.exceptionFingerprint!)}>
+                  All occurrences of this exception
+                </button>
+              </p>
+            )}
           </section>
         )}
 
