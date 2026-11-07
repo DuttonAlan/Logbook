@@ -82,6 +82,8 @@ curl --cookie cookies.txt -G "$LOGBOOK_URL/api/v1/logs" \
 
 The response contains the rendered message with its template, the category, the Environment from `ASPNETCORE_ENVIRONMENT`, the `traceId` and `spanId` of the request, and `OrderId` as a property. [SDK behavior](../reference/sdk-behavior.md#from-ilogger-to-an-event) lists how each field is filled.
 
+To also see requests and dependencies, continue with [Track requests and dependencies](track-requests.md).
+
 ## Choose what is sent
 
 Which levels are sent is set like for any logging provider. For Logbook alone, use the name `Logbook`:

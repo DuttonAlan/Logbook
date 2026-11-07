@@ -40,3 +40,12 @@ export function toLocalInput(timestamp: string | undefined): string {
 export function fromLocalInput(value: string): string | undefined {
   return value ? new Date(value).toISOString() : undefined
 }
+
+// Milliseconds for what is short, as most spans are, and seconds from there on.
+export function formatDuration(milliseconds: number): string {
+  if (milliseconds < 10) {
+    return `${milliseconds.toFixed(1)} ms`
+  }
+
+  return milliseconds < 1000 ? `${Math.round(milliseconds)} ms` : `${(milliseconds / 1000).toFixed(2)} s`
+}

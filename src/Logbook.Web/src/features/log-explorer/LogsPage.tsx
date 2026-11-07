@@ -150,6 +150,25 @@ export function LogsPage() {
       env: undefined,
       q: undefined,
       prop: undefined,
+      exception: undefined,
+      live: undefined,
+    })
+  }
+
+  function showOccurrences(fingerprint: string) {
+    // Without the other filters, or it would only show the occurrences that happen to match them. A group belongs to one
+    // Application, as the same stack in another one is another group.
+    onChange({
+      exception: fingerprint,
+      app: selected?.applicationId,
+      range: 'all',
+      from: undefined,
+      to: undefined,
+      level: undefined,
+      env: undefined,
+      q: undefined,
+      prop: undefined,
+      trace: undefined,
       live: undefined,
     })
   }
@@ -247,6 +266,7 @@ export function LogsPage() {
             canAddPropertyFilter={(search.prop?.length ?? 0) < MAX_PROPERTY_FILTERS}
             onFilterProperty={addPropertyFilter}
             onShowTrace={showTrace}
+            onShowOccurrences={showOccurrences}
           />
         )}
       </div>

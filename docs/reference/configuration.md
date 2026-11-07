@@ -11,7 +11,7 @@ Logbook is configured like any ASP.NET Core application: through `appsettings.js
 | `LogIngestion:MaxEventBytes` | `262144` (256 KiB) | Maximum size of the message, message template, exception and properties of one Log Event together. Must be greater than 0 and at most `MaxRequestBytes`. |
 | `LogIngestion:MaxEventAge` | `7.00:00:00` | How far in the past the timestamp of a Log Event may be. Greater than 0 and at most 3650 days. Each day in the accepted window can become a table in the database. |
 | `LogIngestion:MaxFutureOffset` | `1.00:00:00` | How far in the future the timestamp of a Log Event may be, to tolerate wrong clocks. From 0 to 3650 days. |
-| `LogIngestion:MaxQueuedBytes` | `268435456` (256 MiB) | Maximum memory for Log Events that are accepted but not written yet. Above it, the log API returns `503`. An empty queue takes any batch, so usage can exceed this by one batch. Must be greater than 0. |
+| `LogIngestion:MaxQueuedBytes` | `268435456` (256 MiB) | Maximum memory for Log Events that are accepted but not written yet. Above it, the log API returns `503`. An empty queue takes any batch, so usage can exceed this by one batch. Spans have a queue of their own with the same limit, so the most this can take is twice the value. Must be greater than 0. |
 | `LogIngestion:WriteBatchSize` | `1000` | Maximum number of Log Events written to the database at once. Must be greater than 0. |
 | `LogIngestion:WriteInterval` | `00:00:01` | How long a Log Event waits for others to be written with it, if there are fewer than `WriteBatchSize`. Must be greater than 0. |
 | `RateLimiting:ApiKeyPermitsPerMinute` | `6000` | Requests per minute each API Key can send to the [log API](log-api.md#rate-limit), per server. From 1 to 1,000,000. |
@@ -45,10 +45,10 @@ See [Change the retention](../how-to/manage-applications.md#change-the-retention
 
 | Setting | Default | Description |
 |---|---|---|
-| `Retention:DefaultDays` | `30` | Days to keep the Log Events of an Application without a retention of its own. From 1 to 3650. |
+| `Retention:DefaultDays` | `30` | Days to keep the Log Events and spans of an Application without a retention of its own. From 1 to 3650. |
 | `Retention:Interval` | `01:00:00` | Time between two retention runs. The first run starts with the server. Greater than 0 and at most 30 days. |
 
-A Log Event past its retention is gone after the next run, with one exception: the Log Events of the Application with the longest retention are removed with whole days, so they can stay up to a day longer.
+A Log Event or span past its retention is gone after the next run, with one exception: those of the Application with the longest retention are removed with whole days, so they can stay up to a day longer.
 
 ## Reverse proxy
 
@@ -99,3 +99,16 @@ The SDK is configured through `LogbookOptions`. With `builder.Logging.AddLogbook
 Which levels are sent is set like for any other logging provider, under the name `Logbook`, for example `Logging:Logbook:LogLevel:Default`.
 
 How the client uses these settings when something goes wrong is described in [SDK behavior](sdk-behavior.md).
+
+### Tracking
+
+With `builder.Services.AddLogbookTelemetry(…)` from `Logbook.AspNetCore`, these are read from the section `Logbook:Telemetry`, and then changed by the delegate, if you pass one. See [Track requests and dependencies](../how-to/track-requests.md).
+
+| Setting | Default | Description |
+|---|---|---|
+| `TrackRequests` | `true` | Track the requests the application receives. |
+| `TrackHttpDependencies` | `true` | Track the requests the application makes with `HttpClient`. |
+| `TrackSqlDependencies` | `false` | Track the commands the application sends to a database, with a driver that publishes an `ActivitySource`. |
+| `CaptureSqlText` | `false` | Send the text of SQL statements, which can contain values if a statement is not parameterized. |
+| `SqlActivitySources` | – | Names of further `ActivitySource`s of database drivers. `Npgsql` and `MySqlConnector` are always included. |
+| `ExcludedRequestPaths` | – | Paths of requests not to track, each including what is below it, e.g. `/health`. A missing leading `/` is added, and blank entries are ignored. |

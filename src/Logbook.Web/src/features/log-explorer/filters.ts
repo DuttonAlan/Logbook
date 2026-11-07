@@ -28,6 +28,7 @@ export interface LogSearch {
   q?: string
   prop?: string[]
   trace?: string
+  exception?: string
   live?: boolean
 }
 
@@ -60,12 +61,13 @@ export function parseLogSearch(search: Record<string, unknown>): LogSearch {
     q: asText(search.q),
     prop: asTextList(search.prop),
     trace: asText(search.trace),
+    exception: asText(search.exception),
     live: search.live === true ? true : undefined,
   }
 }
 
 export function hasFilters(search: LogSearch): boolean {
-  return Boolean(search.level || search.app || search.env || search.q || search.prop || search.trace)
+  return Boolean(search.level || search.app || search.env || search.q || search.prop || search.trace || search.exception)
 }
 
 // Everything but the time range, which is what the live tail can filter by as well.
@@ -77,6 +79,7 @@ export function toContentQuery(search: LogSearch): LogEventQuery {
     text: search.q,
     traceId: search.trace,
     properties: search.prop,
+    exceptionFingerprint: search.exception,
   }
 }
 

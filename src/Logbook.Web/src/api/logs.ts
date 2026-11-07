@@ -15,6 +15,7 @@ function toParams(query: LogEventQuery): URLSearchParams {
   if (query.environment) params.set('environment', query.environment)
   if (query.text) params.set('text', query.text)
   if (query.traceId) params.set('traceId', query.traceId)
+  if (query.exceptionFingerprint) params.set('exceptionFingerprint', query.exceptionFingerprint)
   query.levels?.forEach((level) => params.append('level', level))
   query.properties?.forEach((property) => params.append('property', property))
 

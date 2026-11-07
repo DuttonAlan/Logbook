@@ -19,12 +19,14 @@ namespace Logbook.Core.Application.LogEvents.ApplyRetention;
 /// </remarks>
 /// <param name="applicationRepository">An Instance of a IApplicationRepository to read the retention of the Applications.</param>
 /// <param name="logEventRepository">An Instance of a ILogEventRepository to remove the Log Events.</param>
+/// <param name="spanRepository">An Instance of a ISpanRepository to remove the spans, which expire like the Log Events.</param>
 /// <param name="options">The default retention.</param>
 /// <param name="timeProvider">The TimeProvider to decide what has expired.</param>
 /// <param name="logger">The Logger to record what was removed.</param>
 public sealed class ApplyRetentionService(
     IApplicationRepository applicationRepository,
     ILogEventRepository logEventRepository,
+    ISpanRepository spanRepository,
     IOptions<RetentionOptions> options,
     TimeProvider timeProvider,
     ILogger<ApplyRetentionService> logger)
@@ -51,6 +53,11 @@ public sealed class ApplyRetentionService(
             logger.PartitionDropped(day);
         }
 
+        while (await spanRepository.DropOldestExpiredPartition(defaultDays, now, cancellationToken) is { } day)
+        {
+            logger.SpanPartitionDropped(day);
+        }
+
         // The list only decides who needs this, so being out of date costs at most a wait for the next run. What gets
         // removed depends on the current retention, which the repository reads together with each removal.
         foreach (var application in applications)
@@ -67,6 +74,13 @@ public sealed class ApplyRetentionService(
             if (deleted > 0)
             {
                 logger.ExpiredLogEventsDeleted(application.Id, deleted);
+            }
+
+            var deletedSpans = await spanRepository.DeleteExpired(application.Id, defaultDays, now, cancellationToken);
+
+            if (deletedSpans > 0)
+            {
+                logger.ExpiredSpansDeleted(application.Id, deletedSpans);
             }
         }
     }

@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 // See the LICENSE file in the project root for license information.
 
-using System.IO.Compression;
 using System.Text.Json;
 
 namespace Logbook.Sdk;
@@ -24,75 +23,13 @@ internal static class LogEventBatchWriter
     /// <param name="limits">The limits of the server.</param>
     /// <param name="now">The current time.</param>
     /// <returns>The batch. It has no events if none of them can be sent.</returns>
-    public static LogEventBatch Write(IReadOnlyList<BufferedEvent> events, LogEventLimits limits, DateTimeOffset now)
+    public static LogEventBatch Write(IReadOnlyList<BufferedItem<LogbookEvent>> events, LogEventLimits limits, DateTimeOffset now)
     {
-        using var json = new MemoryStream();
-        using var writer = new Utf8JsonWriter(json, LogEventGuard.WriterOptions);
-
-        json.WriteByte((byte)'[');
-
-        var count = 0;
-        var expired = 0;
-        var tooLarge = 0;
-        var truncated = 0;
-        var lastSequence = 0L;
-
-        foreach (var bufferedEvent in events)
-        {
-            var result = LogEventGuard.Check(bufferedEvent.Event, limits, now, out var guarded);
-
-            if (result is LogEventGuardResult.Expired or LogEventGuardResult.TooLarge)
-            {
-                expired += result == LogEventGuardResult.Expired ? 1 : 0;
-                tooLarge += result == LogEventGuardResult.TooLarge ? 1 : 0;
-                lastSequence = bufferedEvent.Sequence;
-                continue;
-            }
-
-            var start = json.Length;
-
-            if (count > 0)
-            {
-                json.WriteByte((byte)',');
-            }
-
-            WriteEvent(writer, guarded!);
-            writer.Flush();
-            writer.Reset();
-
-            // One byte is still needed for the closing bracket.
-            if (json.Length + 1 > limits.MaxRequestBytes)
-            {
-                json.SetLength(start);
-                json.Position = start;
-
-                if (count > 0)
-                {
-                    break;
-                }
-
-                // Too large for any request, so waiting would only hold up the others.
-                tooLarge++;
-                lastSequence = bufferedEvent.Sequence;
-                continue;
-            }
-
-            count++;
-            truncated += result == LogEventGuardResult.Truncated ? 1 : 0;
-            lastSequence = bufferedEvent.Sequence;
-        }
-
-        json.WriteByte((byte)']');
-
-        return new LogEventBatch
-        {
-            Body = count > 0 ? Compress(json) : [],
-            Count = count,
-            LastSequence = lastSequence,
-            ExpiredCount = expired,
-            TooLargeCount = tooLarge,
-            TruncatedCount = truncated
-        };
+        return TelemetryBatchWriter.Write(
+            events,
+            limits.MaxRequestBytes,
+            (LogbookEvent logEvent, out LogbookEvent? guarded) => LogEventGuard.Check(logEvent, limits, now, out guarded),
+            WriteEvent);
     }
 
     private static void WriteEvent(Utf8JsonWriter writer, LogbookEvent logEvent)
@@ -101,9 +38,9 @@ internal static class LogEventBatchWriter
         writer.WriteString("timestamp", logEvent.Timestamp);
         writer.WriteString("level", GetLevelName(logEvent.Level));
         writer.WriteString("message", logEvent.Message);
-        WriteOptionalString(writer, "messageTemplate", logEvent.MessageTemplate);
-        WriteOptionalString(writer, "category", logEvent.Category);
-        WriteOptionalString(writer, "environment", logEvent.Environment);
+        TelemetryBatchWriter.WriteOptionalString(writer, "messageTemplate", logEvent.MessageTemplate);
+        TelemetryBatchWriter.WriteOptionalString(writer, "category", logEvent.Category);
+        TelemetryBatchWriter.WriteOptionalString(writer, "environment", logEvent.Environment);
 
         if (logEvent.EventId is { } eventId)
         {
@@ -111,18 +48,10 @@ internal static class LogEventBatchWriter
         }
 
         WriteOptionalObject(writer, "exception", logEvent.ExceptionJson);
-        WriteOptionalString(writer, "traceId", logEvent.TraceId);
-        WriteOptionalString(writer, "spanId", logEvent.SpanId);
+        TelemetryBatchWriter.WriteOptionalString(writer, "traceId", logEvent.TraceId);
+        TelemetryBatchWriter.WriteOptionalString(writer, "spanId", logEvent.SpanId);
         WriteOptionalObject(writer, "properties", logEvent.PropertiesJson);
         writer.WriteEndObject();
-    }
-
-    private static void WriteOptionalString(Utf8JsonWriter writer, string name, string? value)
-    {
-        if (value is not null)
-        {
-            writer.WriteString(name, value);
-        }
     }
 
     private static void WriteOptionalObject(Utf8JsonWriter writer, string name, string? json)
@@ -148,17 +77,5 @@ internal static class LogEventBatchWriter
             // An undefined value would reject the whole batch.
             _ => "Information"
         };
-    }
-
-    private static byte[] Compress(MemoryStream json)
-    {
-        using var compressed = new MemoryStream();
-
-        using (var gzip = new GZipStream(compressed, CompressionLevel.Fastest, leaveOpen: true))
-        {
-            gzip.Write(json.GetBuffer(), 0, (int)json.Length);
-        }
-
-        return compressed.ToArray();
     }
 }

@@ -16,7 +16,7 @@ namespace Logbook.Core.Domain.Entities;
 ///     Text and JSON are made storable here, because PostgreSQL rejects some values that are valid in JSON, and one
 ///     such value would otherwise fail all Log Events written together with it.
 /// </remarks>
-public sealed class LogEvent
+public sealed class LogEvent : ITelemetryRecord
 {
     /// <summary>
     ///     The Environment of a Log Event that was sent without one.
@@ -112,6 +112,12 @@ public sealed class LogEvent
     public string? Exception { get; private set; }
 
     /// <summary>
+    ///     What identifies the failure of the Exception, computed when the Log Event is received. Log Events with the same
+    ///     fingerprint form a group.
+    /// </summary>
+    public string? ExceptionFingerprint { get; private set; }
+
+    /// <summary>
     ///     The W3C Trace Id.
     /// </summary>
     public string? TraceId { get; private set; }
@@ -181,6 +187,7 @@ public sealed class LogEvent
             Environment = NormalizeOptionalText(environment, EnvironmentMaxLength, nameof(environment)) ?? DefaultEnvironment,
             EventId = eventId,
             Exception = LogEventJson.NormalizeObject(exception, nameof(exception)),
+            ExceptionFingerprint = ValueObjects.ExceptionFingerprint.Compute(exception),
             TraceId = NormalizeOptionalText(traceId, TraceFieldMaxLength, nameof(traceId)),
             SpanId = NormalizeOptionalText(spanId, TraceFieldMaxLength, nameof(spanId)),
             Properties = LogEventJson.NormalizeObject(properties, nameof(properties))
@@ -199,11 +206,7 @@ public sealed class LogEvent
             + Encoding.UTF8.GetByteCount(Properties ?? string.Empty);
     }
 
-    /// <summary>
-    ///     Estimates the memory the Log Event holds while it waits in the queue. Unlike the size on the wire, a string
-    ///     takes two bytes for each character, so text mostly in ASCII takes about twice as much.
-    /// </summary>
-    /// <returns>The estimated size in bytes.</returns>
+    /// <inheritdoc/>
     public long GetMemoryBytes()
     {
         var characters = (long)Message.Length
@@ -211,6 +214,7 @@ public sealed class LogEvent
             + (Category?.Length ?? 0)
             + Environment.Length
             + (Exception?.Length ?? 0)
+            + (ExceptionFingerprint?.Length ?? 0)
             + (TraceId?.Length ?? 0)
             + (SpanId?.Length ?? 0)
             + (Properties?.Length ?? 0);

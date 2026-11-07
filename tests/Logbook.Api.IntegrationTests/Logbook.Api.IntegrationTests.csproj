@@ -9,6 +9,7 @@
     <ProjectReference Include="..\..\src\Logbook.Api\Logbook.Api.csproj" />
     <ProjectReference Include="..\..\sdk\Logbook.Sdk\Logbook.Sdk.csproj" />
     <ProjectReference Include="..\..\sdk\Logbook.Extensions.Logging\Logbook.Extensions.Logging.csproj" />
+    <ProjectReference Include="..\..\sdk\Logbook.AspNetCore\Logbook.AspNetCore.csproj" />
   </ItemGroup>
 
 </Project>

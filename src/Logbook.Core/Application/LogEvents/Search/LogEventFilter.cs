@@ -17,6 +17,7 @@ namespace Logbook.Core.Application.LogEvents.Search;
 /// <param name="Text">Only Log Events whose message matches this full-text search.</param>
 /// <param name="TraceId">Only Log Events of this trace, compared exactly.</param>
 /// <param name="Properties">Only Log Events with all of these properties.</param>
+/// <param name="ExceptionFingerprint">Only Log Events with an exception of this group, compared exactly.</param>
 public sealed record LogEventFilter(
     DateTimeOffset? From = null,
     DateTimeOffset? To = null,
@@ -25,7 +26,8 @@ public sealed record LogEventFilter(
     string? Environment = null,
     string? Text = null,
     string? TraceId = null,
-    IReadOnlyList<LogEventPropertyFilter>? Properties = null)
+    IReadOnlyList<LogEventPropertyFilter>? Properties = null,
+    string? ExceptionFingerprint = null)
 {
     /// <summary>
     ///     Treats the text filters like the stored values, which are trimmed and have no U+0000. PostgreSQL rejects U+0000
@@ -38,7 +40,8 @@ public sealed record LogEventFilter(
         {
             Environment = NormalizeText(Environment),
             Text = NormalizeText(Text),
-            TraceId = NormalizeText(TraceId)
+            TraceId = NormalizeText(TraceId),
+            ExceptionFingerprint = NormalizeText(ExceptionFingerprint)
         };
     }
 

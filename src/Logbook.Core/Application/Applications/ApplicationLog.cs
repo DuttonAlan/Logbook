@@ -29,6 +29,9 @@ internal static partial class ApplicationLog
     [LoggerMessage(EventId = 1006, Level = LogLevel.Warning, Message = "{Count} Log Events of Application {ApplicationId} were deleted.")]
     public static partial void LogEventsOfApplicationDeleted(this ILogger logger, Guid applicationId, long count);
 
+    [LoggerMessage(EventId = 1008, Level = LogLevel.Warning, Message = "{Count} spans of Application {ApplicationId} were deleted.")]
+    public static partial void SpansOfApplicationDeleted(this ILogger logger, Guid applicationId, long count);
+
     [LoggerMessage(EventId = 1007, Level = LogLevel.Information, Message = "The retention of Application {ApplicationId} was set to {RetentionDays} days (empty: the default).")]
     public static partial void RetentionChanged(this ILogger logger, Guid applicationId, int? retentionDays);
 }

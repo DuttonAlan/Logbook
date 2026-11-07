@@ -107,6 +107,10 @@ namespace Logbook.Infrastructure.Persistence.Migrations
                     b.Property<string>("Exception")
                         .HasColumnType("jsonb");
 
+                    b.Property<string>("ExceptionFingerprint")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<short>("Level")
                         .HasColumnType("smallint");
 
@@ -148,10 +152,91 @@ namespace Logbook.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Environment", "Timestamp", "Id");
 
+                    b.HasIndex("ExceptionFingerprint", "Timestamp", "Id")
+                        .HasFilter("\"ExceptionFingerprint\" IS NOT NULL");
+
+                    b.HasIndex("Timestamp", "ApplicationId", "ExceptionFingerprint")
+                        .HasDatabaseName("IX_log_events_Timestamp_ExceptionGroup")
+                        .HasFilter("\"ExceptionFingerprint\" IS NOT NULL");
+
                     b.HasIndex("TraceId", "Timestamp", "Id")
                         .HasFilter("\"TraceId\" IS NOT NULL");
 
                     b.ToTable("log_events", "telemetry");
+                });
+
+            modelBuilder.Entity("Logbook.Core.Domain.Entities.TraceSpan", b =>
+                {
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ApplicationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Data")
+                        .HasMaxLength(8192)
+                        .HasColumnType("character varying(8192)");
+
+                    b.Property<string>("DependencyType")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<double>("DurationMs")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Environment")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<short>("Kind")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ParentSpanId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("SpanId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int?>("StatusCode")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Success")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Target")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("TraceId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Timestamp", "Id");
+
+                    b.HasIndex("Timestamp", "Id")
+                        .HasDatabaseName("IX_spans_Timestamp_Id_Failed")
+                        .HasFilter("NOT \"Success\"");
+
+                    b.HasIndex("ApplicationId", "Timestamp", "Id");
+
+                    b.HasIndex("Kind", "Timestamp", "Id");
+
+                    b.HasIndex("TraceId", "Timestamp", "Id");
+
+                    b.ToTable("spans", "telemetry");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>

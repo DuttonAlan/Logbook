@@ -47,6 +47,7 @@ public static class ServiceCollectionExtensions
 
         serviceCollection.AddTransient<IApplicationRepository, ApplicationRepository>();
         serviceCollection.AddTransient<ILogEventRepository, LogEventRepository>();
+        serviceCollection.AddTransient<ISpanRepository, SpanRepository>();
 
         serviceCollection.AddSingleton<LogEventQueue>();
         serviceCollection.AddSingleton<ILogEventQueue>(services => services.GetRequiredService<LogEventQueue>());
@@ -54,6 +55,11 @@ public static class ServiceCollectionExtensions
         serviceCollection.AddSingleton<LogEventFeed>();
         serviceCollection.AddSingleton<ILogEventFeed>(services => services.GetRequiredService<LogEventFeed>());
         serviceCollection.AddHostedService<LogEventWriterService>();
+
+        serviceCollection.AddSingleton<SpanQueue>();
+        serviceCollection.AddSingleton<ISpanQueue>(services => services.GetRequiredService<SpanQueue>());
+        serviceCollection.AddSingleton<SpanBatchWriter>();
+        serviceCollection.AddHostedService<SpanWriterService>();
 
         serviceCollection.AddHostedService<LogEventRetentionService>();
 

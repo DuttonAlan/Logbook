@@ -16,4 +16,10 @@ internal static partial class RetentionLog
 
     [LoggerMessage(EventId = 2302, Level = LogLevel.Information, Message = "{Count} expired Log Events of Application {ApplicationId} were deleted.")]
     public static partial void ExpiredLogEventsDeleted(this ILogger logger, Guid applicationId, long count);
+
+    [LoggerMessage(EventId = 2303, Level = LogLevel.Information, Message = "The partition of the spans of {Day} has expired and was dropped.")]
+    public static partial void SpanPartitionDropped(this ILogger logger, DateOnly day);
+
+    [LoggerMessage(EventId = 2304, Level = LogLevel.Information, Message = "{Count} expired spans of Application {ApplicationId} were deleted.")]
+    public static partial void ExpiredSpansDeleted(this ILogger logger, Guid applicationId, long count);
 }

@@ -5,18 +5,19 @@
 namespace Logbook.Sdk;
 
 /// <summary>
-///     An event in the <see cref="LogEventBuffer"/>.
+///     An event in a <see cref="TelemetryBuffer{T}"/>.
 /// </summary>
-/// <param name="logEvent">The event.</param>
+/// <typeparam name="T">The type of the event.</typeparam>
+/// <param name="item">The event.</param>
 /// <param name="sequence">Its position among all events ever added, which only grows.</param>
 /// <param name="bytes">The memory it was counted with.</param>
 /// <param name="enqueuedAt">The timestamp of the clock when it was added.</param>
-internal readonly struct BufferedEvent(LogbookEvent logEvent, long sequence, long bytes, long enqueuedAt)
+internal readonly struct BufferedItem<T>(T item, long sequence, long bytes, long enqueuedAt)
 {
     /// <summary>
     ///     The event.
     /// </summary>
-    public LogbookEvent Event { get; } = logEvent;
+    public T Item { get; } = item;
 
     /// <summary>
     ///     Its position among all events ever added, which only grows.
