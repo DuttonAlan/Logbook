@@ -90,7 +90,7 @@ public sealed class LogEventBufferTests
 
         var peeked = buffer.Peek(2);
 
-        Assert.Equal(["1", "2"], peeked.Select(bufferedEvent => bufferedEvent.Event.Message));
+        Assert.Equal(["1", "2"], peeked.Select(item => item.Item.Message));
         Assert.Equal(3, buffer.Count);
 
         buffer.RemoveThrough(peeked[^1].Sequence);
@@ -155,7 +155,7 @@ public sealed class LogEventBufferTests
         Assert.Equal(MaxCount * Event("x").GetMemoryBytes(), buffer.Bytes);
         Assert.Equal((Threads * EventsPerThread) - MaxCount, buffer.DroppedCount);
 
-        var sequences = buffer.Peek(MaxCount).Select(bufferedEvent => bufferedEvent.Sequence).ToArray();
+        var sequences = buffer.Peek(MaxCount).Select(item => item.Sequence).ToArray();
         Assert.Equal(sequences.Order(), sequences);
     }
 
@@ -233,17 +233,17 @@ public sealed class LogEventBufferTests
 
     private static LogbookEvent Event(string message) => new(DateTimeOffset.UnixEpoch, LogbookLevel.Information, message);
 
-    private static IEnumerable<string> Messages(LogEventBuffer buffer)
+    private static IEnumerable<string> Messages(TelemetryBuffer<LogbookEvent> buffer)
     {
-        return buffer.Peek(int.MaxValue).Select(bufferedEvent => bufferedEvent.Event.Message);
+        return buffer.Peek(int.MaxValue).Select(item => item.Item.Message);
     }
 
-    private LogEventBuffer CreateBuffer(
+    private TelemetryBuffer<LogbookEvent> CreateBuffer(
         int maxCount = int.MaxValue,
         long maxBytes = NoLimit,
         int batchCount = int.MaxValue,
         long batchBytes = NoLimit)
     {
-        return new LogEventBuffer(maxCount, maxBytes, batchCount, batchBytes, _time);
+        return new TelemetryBuffer<LogbookEvent>(maxCount, maxBytes, batchCount, batchBytes, _time);
     }
 }

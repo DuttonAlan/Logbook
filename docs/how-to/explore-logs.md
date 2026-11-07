@@ -31,6 +31,8 @@ Times are shown in the time zone of your browser. Hover over a time to see the f
 Select a row to open its details: the whole message, its template, the exception with its stack trace and inner exceptions, and the properties. With the row selected, the arrow keys move to the next and previous Log Event, and <kbd>Esc</kbd> closes the details.
 
 - **Filter** next to a property adds it as a filter.
+- **Open the transaction** shows the Log Event on the [timeline](track-requests.md#read-the-transactions) of its trace.
+- **All occurrences of this exception** shows the Log Events of the same [group](track-requests.md#find-what-fails-most).
 - **All Log Events of this trace** shows what belongs to the same trace, across all Applications and Environments. It replaces your other filters, because those could hide a part of the trace.
 - **Copy as JSON** copies the whole Log Event.
 

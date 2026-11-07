@@ -10,7 +10,7 @@ Logbook is a lightweight, self-hosted **logging solution for .NET applications**
 
 Add one NuGet package to your application, run one container, and see structured logs within minutes, without the weight of a full APM suite.
 
-> **Project status: early.** Logbook is being built step by step. The server, the SDK, the log explorer, sign-in and retention work. Nothing is published yet: version 1.0 follows when all milestones are finished. See the [roadmap](docs/roadmap.md) for what is planned and in which order.
+> **Project status: early.** Logbook is being built step by step. The server, the SDK, the log explorer, sign-in, retention, and request and exception tracking work. Nothing is published yet: version 1.0 follows when all milestones are finished. See the [roadmap](docs/roadmap.md) for what is planned and in which order.
 
 ## Features
 

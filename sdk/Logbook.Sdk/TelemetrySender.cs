@@ -8,27 +8,27 @@ using System.Net.Http.Headers;
 namespace Logbook.Sdk;
 
 /// <summary>
-///     The background loop that sends the events in the <see cref="LogEventBuffer"/> in batches.
+///     The background loop that sends the events in a <see cref="TelemetryBuffer{T}"/> in batches.
 /// </summary>
 /// <remarks>
 ///     Every attempt reads the oldest events again, so a batch that failed gets sent without the events that were dropped
 ///     in the meantime. Events leave the buffer once the server has accepted them, or has said that sending them again
 ///     would not help.
 /// </remarks>
-internal sealed class LogEventSender : IDisposable
+internal sealed class TelemetrySender<T> : IDisposable
+    where T : ITelemetryItem
 {
     private const string ApiKeyHeader = "X-Logbook-Key";
-    private const string LogsPath = "/api/v1/logs";
 
     private static readonly MediaTypeHeaderValue JsonContentType = new("application/json");
 
-    private readonly LogEventBuffer _buffer;
+    private readonly TelemetryBuffer<T> _buffer;
     private readonly HttpClient _httpClient;
     private readonly TimeProvider _timeProvider;
-    private readonly Uri _logsUri;
+    private readonly Uri _uri;
     private readonly string _apiKey;
     private readonly int _batchSize;
-    private readonly LogEventLimits _limits;
+    private readonly Func<IReadOnlyList<BufferedItem<T>>, DateTimeOffset, LogEventBatch> _writeBatch;
     private readonly TimeSpan _flushInterval;
     private readonly TimeSpan _shutdownTimeout;
     private readonly RetryBackoff _backoff = new();
@@ -45,31 +45,34 @@ internal sealed class LogEventSender : IDisposable
     ///     Creates the sender.
     /// </summary>
     /// <param name="options">The options, which must be valid.</param>
-    /// <param name="limits">The limits for the events.</param>
+    /// <param name="httpClient">The client to send with, which the caller disposes after the sender has ended.</param>
+    /// <param name="path">The path of the endpoint on the server.</param>
     /// <param name="buffer">The buffer to send from.</param>
-    /// <param name="handler">The handler for the requests, or null for the default.</param>
+    /// <param name="writeBatch">Writes as many of the events as fit into one request.</param>
     /// <param name="timeProvider">The clock for the waiting times.</param>
-    public LogEventSender(
+    public TelemetrySender(
         LogbookOptions options,
-        LogEventLimits limits,
-        LogEventBuffer buffer,
-        HttpMessageHandler? handler,
+        HttpClient httpClient,
+        string path,
+        TelemetryBuffer<T> buffer,
+        Func<IReadOnlyList<BufferedItem<T>>, DateTimeOffset, LogEventBatch> writeBatch,
         TimeProvider timeProvider)
     {
         _buffer = buffer;
         _timeProvider = timeProvider;
-
-#pragma warning disable CA2000 // The HttpClient owns the handler and disposes it.
-        _httpClient = new HttpClient(handler ?? CreateDefaultHandler()) { Timeout = options.RequestTimeout };
-#pragma warning restore CA2000
-
-        _logsUri = new Uri(options.Endpoint!.GetLeftPart(UriPartial.Path).TrimEnd('/') + LogsPath);
+        _httpClient = httpClient;
+        _uri = new Uri(options.Endpoint!.GetLeftPart(UriPartial.Path).TrimEnd('/') + path);
         _apiKey = options.ApiKey!;
         _batchSize = options.BatchSize;
-        _limits = limits;
+        _writeBatch = writeBatch;
         _flushInterval = options.FlushInterval;
         _shutdownTimeout = options.ShutdownTimeout;
     }
+
+    /// <summary>
+    ///     Ends when the loop has ended, and with it all use of the HttpClient.
+    /// </summary>
+    public Task Completion => _loop;
 
     /// <summary>
     ///     Starts the loop in the background.
@@ -102,7 +105,6 @@ internal sealed class LogEventSender : IDisposable
         _ = _loop.ContinueWith(
             _ =>
             {
-                _httpClient.Dispose();
                 _stopping.Dispose();
                 _aborting.Dispose();
             },
@@ -111,27 +113,10 @@ internal sealed class LogEventSender : IDisposable
             TaskScheduler.Default);
     }
 
-    /// <summary>
-    ///     Creates the handler used outside of tests.
-    /// </summary>
-    /// <returns>The handler.</returns>
-    /// <remarks>
-    ///     Redirects are not followed: following one turns the POST into a GET, whose <c>200</c> would look like delivered
-    ///     events, and could send the API Key to another host.
-    /// </remarks>
-    internal static HttpMessageHandler CreateDefaultHandler()
-    {
-        if (SocketsHttpHandler.IsSupported)
-        {
-            // With a long-lived HttpClient, the lifetime lets a server that moved to another address be found again.
-            return new SocketsHttpHandler { AllowAutoRedirect = false, PooledConnectionLifetime = TimeSpan.FromMinutes(5) };
-        }
-
-        return new HttpClientHandler { AllowAutoRedirect = false };
-    }
-
     private async Task RunAsync()
     {
+        SendingFlow.Mark();
+
         var stopping = _stopping.Token;
 
         while (!stopping.IsCancellationRequested)
@@ -218,7 +203,7 @@ internal sealed class LogEventSender : IDisposable
             return null;
         }
 
-        var batch = LogEventBatchWriter.Write(events, _limits, _timeProvider.GetUtcNow());
+        var batch = _writeBatch(events, _timeProvider.GetUtcNow());
 
         if (batch.Count == 0)
         {
@@ -228,7 +213,7 @@ internal sealed class LogEventSender : IDisposable
             return null;
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, _logsUri) { Content = new ByteArrayContent(batch.Body) };
+        using var request = new HttpRequestMessage(HttpMethod.Post, _uri) { Content = new ByteArrayContent(batch.Body) };
         request.Headers.TryAddWithoutValidation(ApiKeyHeader, _apiKey);
         request.Content.Headers.ContentType = JsonContentType;
         request.Content.Headers.ContentEncoding.Add("gzip");

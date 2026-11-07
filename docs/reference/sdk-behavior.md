@@ -49,6 +49,18 @@ An `AggregateException` has the array `innerExceptions` instead of `inner`. At m
 
 If any of these limits is reached, or text in a value or an exception or the name of a value is over `MaxMessageLength`, the event is marked as [truncated](#events-over-a-limit).
 
+## Requests and dependencies
+
+`AddLogbookTelemetry` from `Logbook.AspNetCore` sends spans next to the Log Events, through the same client:
+
+- **Requests** are measured by a middleware in front of the whole pipeline, which needs no call in `Program.cs`.
+- **Dependencies** come from an `ActivityListener` on `System.Net.Http` and, if asked for, on database drivers. It sees the whole process, not only one host.
+- **Trace context:** the listener makes ASP.NET Core and `HttpClient` always start activities, so every request has a Trace Id, and W3C headers go out with every call. It asks for the data of tracked calls only.
+- **The SDK's own requests** are never tracked, as each would create another span to send.
+- **Query strings** are never sent, as they can contain secrets.
+
+Spans have a buffer of their own, with the same limits `MaxQueueSize` and `MaxQueueBytes`, so a busy application cannot push out the Log Events that explain what went wrong. This means the most the client can hold is twice those values. Each buffer has its own sending loop and backoff, but `ShutdownTimeout` applies once, to both together. The [responses](#responses), [shutdown](#shutdown) and [diagnostics](#diagnostics) below apply to spans as they do to Log Events, and the events of the `EventSource` do not tell the two apart. Spans outside of the time window are dropped, and their text is cut at the limits of the server without a mark, as they have no properties to carry one.
+
 ## Responses
 
 | Response | What the client does | Next attempt |

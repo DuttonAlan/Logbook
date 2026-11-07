@@ -2,7 +2,10 @@
 // Licensed under the MIT License.
 // See the LICENSE file in the project root for license information.
 
+using System.Text.Json;
+
 using Logbook.Core.Abstractions;
+using Logbook.Core.Application.ExceptionGroups.Search;
 using Logbook.Core.Application.LogEvents.Search;
 using Logbook.Core.Application.LogEvents.Tail;
 using Logbook.Core.Domain.Entities;
@@ -23,7 +26,7 @@ public sealed class LogEventRepository(LogbookContext context) : ILogEventReposi
 
     // A new property of LogEvent must be added here and in AddRange: COPY does not use the EF Core model.
     private const string CopyCommand = """
-        COPY telemetry.log_events ("Id", "Timestamp", "ApplicationId", "Level", "Message", "MessageTemplate", "Category", "Environment", "EventId", "Exception", "TraceId", "SpanId", "Properties")
+        COPY telemetry.log_events ("Id", "Timestamp", "ApplicationId", "Level", "Message", "MessageTemplate", "Category", "Environment", "EventId", "Exception", "ExceptionFingerprint", "TraceId", "SpanId", "Properties")
         FROM STDIN (FORMAT BINARY)
         """;
 
@@ -79,6 +82,94 @@ public sealed class LogEventRepository(LogbookContext context) : ILogEventReposi
     }
 
     /// <inheritdoc/>
+    public async Task<IReadOnlyList<LogEvent>> GetByTrace(string traceId, int take, CancellationToken cancellationToken = default)
+    {
+        return await context.LogEvents.AsNoTracking()
+            .Where(logEvent => logEvent.TraceId == traceId)
+            .OrderBy(logEvent => logEvent.Timestamp)
+            .ThenBy(logEvent => logEvent.Id)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<ExceptionGroupResponse>> GetExceptionGroups(
+        LogEventFilter filter,
+        ExceptionGroupSort sort,
+        int take,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        var grouped = ApplyFilter(context.LogEvents.AsNoTracking(), filter)
+            .Where(logEvent => logEvent.ExceptionFingerprint != null)
+            .GroupBy(logEvent => new { logEvent.ApplicationId, Fingerprint = logEvent.ExceptionFingerprint! })
+            .Select(group => new
+            {
+                group.Key.ApplicationId,
+                group.Key.Fingerprint,
+                Count = group.LongCount(),
+                LastOccurrence = group.Max(logEvent => logEvent.Timestamp)
+            });
+
+        // The Fingerprint last, so that the order is the same for every request.
+        var ordered = sort == ExceptionGroupSort.Count
+            ? grouped.OrderByDescending(group => group.Count).ThenByDescending(group => group.LastOccurrence)
+            : grouped.OrderByDescending(group => group.LastOccurrence).ThenByDescending(group => group.Count);
+
+        var groups = await ordered.ThenBy(group => group.Fingerprint).Take(take).ToListAsync(cancellationToken);
+
+        if (groups.Count == 0)
+        {
+            return [];
+        }
+
+        var applicationIds = groups.Select(group => group.ApplicationId).ToArray();
+        var fingerprints = groups.Select(group => group.Fingerprint).ToArray();
+        var lastOccurrences = groups.Select(group => group.LastOccurrence).ToArray();
+        var environment = filter.Environment;
+
+        // For each group, one lookup in the index on the fingerprint rather than reading all of its Log Events again. The
+        // first occurrence ignores the time range, as "is this new?" is what it is there to answer.
+        var details = await context.Database
+            .SqlQuery<ExceptionGroupDetails>($"""
+                SELECT g."ApplicationId", g."Fingerprint", first_seen."Timestamp" AS "FirstOccurrence", latest."Exception"
+                FROM unnest({applicationIds}, {fingerprints}, {lastOccurrences}) AS g("ApplicationId", "Fingerprint", "LastOccurrence")
+                CROSS JOIN LATERAL (
+                    SELECT e."Timestamp" FROM telemetry.log_events e
+                    WHERE e."ExceptionFingerprint" = g."Fingerprint" AND e."ApplicationId" = g."ApplicationId"
+                        AND ({environment}::text IS NULL OR e."Environment" = {environment})
+                    ORDER BY e."Timestamp"
+                    LIMIT 1) first_seen
+                CROSS JOIN LATERAL (
+                    SELECT e."Exception"::text AS "Exception" FROM telemetry.log_events e
+                    WHERE e."ExceptionFingerprint" = g."Fingerprint" AND e."ApplicationId" = g."ApplicationId" AND e."Timestamp" = g."LastOccurrence"
+                    LIMIT 1) latest
+                """)
+            .ToListAsync(cancellationToken);
+
+        var detailsByGroup = details.ToDictionary(detail => (detail.ApplicationId, detail.Fingerprint));
+        var responses = new List<ExceptionGroupResponse>(groups.Count);
+
+        foreach (var group in groups)
+        {
+            // Retention can remove the rows between the two queries.
+            if (detailsByGroup.TryGetValue((group.ApplicationId, group.Fingerprint), out var detail))
+            {
+                responses.Add(new ExceptionGroupResponse(
+                    group.ApplicationId,
+                    group.Fingerprint,
+                    group.Count,
+                    detail.FirstOccurrence,
+                    group.LastOccurrence,
+                    JsonSerializer.Deserialize<JsonElement>(detail.Exception)));
+            }
+        }
+
+        return responses;
+    }
+
+    /// <inheritdoc/>
     public async Task AddRange(IReadOnlyCollection<LogEvent> logEvents, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(logEvents);
@@ -115,6 +206,7 @@ public sealed class LogEventRepository(LogbookContext context) : ILogEventReposi
                 await importer.WriteAsync(logEvent.Environment, NpgsqlDbType.Varchar, cancellationToken);
                 await importer.WriteAsync(logEvent.EventId, NpgsqlDbType.Integer, cancellationToken);
                 await importer.WriteAsync(logEvent.Exception, NpgsqlDbType.Jsonb, cancellationToken);
+                await importer.WriteAsync(logEvent.ExceptionFingerprint, NpgsqlDbType.Varchar, cancellationToken);
                 await importer.WriteAsync(logEvent.TraceId, NpgsqlDbType.Varchar, cancellationToken);
                 await importer.WriteAsync(logEvent.SpanId, NpgsqlDbType.Varchar, cancellationToken);
                 await importer.WriteAsync(logEvent.Properties, NpgsqlDbType.Jsonb, cancellationToken);
@@ -253,6 +345,11 @@ public sealed class LogEventRepository(LogbookContext context) : ILogEventReposi
         if (filter.TraceId is { } traceId)
         {
             query = query.Where(logEvent => logEvent.TraceId == traceId);
+        }
+
+        if (filter.ExceptionFingerprint is { } fingerprint)
+        {
+            query = query.Where(logEvent => logEvent.ExceptionFingerprint == fingerprint);
         }
 
         foreach (var property in filter.Properties ?? [])

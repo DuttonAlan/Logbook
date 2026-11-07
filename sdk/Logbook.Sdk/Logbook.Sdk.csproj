@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Logbook.AspNetCore" />
     <InternalsVisibleTo Include="Logbook.Sdk.Tests" />
     <InternalsVisibleTo Include="Logbook.Api.IntegrationTests" />
   </ItemGroup>

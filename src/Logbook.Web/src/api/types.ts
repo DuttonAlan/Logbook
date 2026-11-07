@@ -20,6 +20,7 @@ export interface LogEvent {
   traceId: string | null
   spanId: string | null
   properties: { [key: string]: JsonValue } | null
+  exceptionFingerprint: string | null
 }
 
 export interface LogEventPage {
@@ -36,6 +37,73 @@ export interface LogEventQuery {
   text?: string
   traceId?: string
   properties?: string[]
+  exceptionFingerprint?: string
+}
+
+export type SpanKind = 'Request' | 'Dependency'
+
+export interface Span {
+  id: string
+  applicationId: string
+  timestamp: string
+  kind: SpanKind
+  name: string
+  durationMs: number
+  success: boolean
+  environment: string
+  traceId: string
+  spanId: string
+  parentSpanId: string | null
+  statusCode: number | null
+  dependencyType: string | null
+  target: string | null
+  data: string | null
+}
+
+export interface SpanPage {
+  items: Span[]
+  nextCursor: string | null
+}
+
+export interface SpanQuery {
+  from?: string
+  to?: string
+  kind?: SpanKind
+  applicationId?: string
+  environment?: string
+  name?: string
+  success?: boolean
+  minDurationMs?: number
+}
+
+export interface Trace {
+  traceId: string
+  spans: Span[]
+  logEvents: LogEvent[]
+  isTruncated: boolean
+}
+
+export type ExceptionGroupSort = 'LastOccurrence' | 'Count'
+
+export interface ExceptionGroup {
+  applicationId: string
+  fingerprint: string
+  count: number
+  firstOccurrence: string
+  lastOccurrence: string
+  exception: { [key: string]: JsonValue }
+}
+
+export interface ExceptionGroups {
+  items: ExceptionGroup[]
+}
+
+export interface ExceptionGroupQuery {
+  from?: string
+  to?: string
+  applicationId?: string
+  environment?: string
+  sort: ExceptionGroupSort
 }
 
 export interface ApplicationSummary {

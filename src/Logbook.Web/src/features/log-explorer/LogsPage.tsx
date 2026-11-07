@@ -150,6 +150,7 @@ export function LogsPage() {
       env: undefined,
       q: undefined,
       prop: undefined,
+      exception: undefined,
       live: undefined,
     })
   }
@@ -247,6 +248,7 @@ export function LogsPage() {
             canAddPropertyFilter={(search.prop?.length ?? 0) < MAX_PROPERTY_FILTERS}
             onFilterProperty={addPropertyFilter}
             onShowTrace={showTrace}
+            onShowOccurrences={(fingerprint) => onChange({ exception: fingerprint, app: selected.applicationId, range: 'all', from: undefined, to: undefined, live: undefined })}
           />
         )}
       </div>

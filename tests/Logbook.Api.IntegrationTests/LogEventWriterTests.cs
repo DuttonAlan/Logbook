@@ -5,6 +5,7 @@
 using System.Text.Json;
 
 using Logbook.Core.Abstractions;
+using Logbook.Core.Application.ExceptionGroups.Search;
 using Logbook.Core.Application.LogEvents;
 using Logbook.Core.Application.LogEvents.Search;
 using Logbook.Core.Application.LogEvents.Tail;
@@ -304,6 +305,16 @@ public sealed class LogEventWriterTests
         }
 
         public Task<IReadOnlyList<LogEvent>> GetWritten(WrittenLogEvents written, LogEventFilter filter, int take, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<IReadOnlyList<LogEvent>> GetByTrace(string traceId, int take, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<IReadOnlyList<ExceptionGroupResponse>> GetExceptionGroups(LogEventFilter filter, ExceptionGroupSort sort, int take, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }

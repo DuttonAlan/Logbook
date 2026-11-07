@@ -726,6 +726,20 @@ public sealed class LogIngestionTests(LogbookApiFactory factory) : IClassFixture
             throw new NotSupportedException();
         }
 
+        public Task<IReadOnlyList<LogEvent>> GetByTrace(string traceId, int take, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<IReadOnlyList<Logbook.Core.Application.ExceptionGroups.Search.ExceptionGroupResponse>> GetExceptionGroups(
+            LogEventFilter filter,
+            Logbook.Core.Application.ExceptionGroups.Search.ExceptionGroupSort sort,
+            int take,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
         public Task<long> DeleteByApplication(Guid applicationId, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();

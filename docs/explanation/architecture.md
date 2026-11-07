@@ -124,6 +124,16 @@ The SDK reports what it does through an `EventSource`. Logging through `ILogger`
 
 The SDK does not reference the server projects. The two only share the format of the requests, which is versioned so that older SDKs keep working with newer servers.
 
+## Spans, transactions and exceptions
+
+A Log Event says what an application wanted to tell, while a span says what it did and how long that took. Spans are stored in a table of their own, because they have fields a Log Event does not, and because they would otherwise flood the log explorer and its indexes. They go through the same machinery of queue, batches and partitions, with their own queue and writer, so a burst of requests cannot hold up the logs that explain it.
+
+A **transaction** is not stored as such. It is what a Trace Id finds in both tables, put together when it is asked for. That also covers several Applications, as the Trace Id travels with their calls.
+
+**Groups of exceptions** are not stored either. Each Log Event gets a fingerprint when it is received, and the groups are aggregated from those with a small index that only holds Log Events with an exception. A table of groups would be faster to read, but its counts would have to follow retention, deletions and every time range someone asks for, and could disagree with what is actually stored. What counts for a fingerprint is explained in [the reference](../reference/telemetry-api.md#what-makes-two-exceptions-the-same).
+
+The SDK finds requests with a middleware, as only there the route and status are known. It finds dependencies through `ActivitySource`s, which needs no change to how an application creates its clients. Its own requests must not be tracked, or each one would create another to send. Comparing addresses would also hide calls of the application to the same server, so the loop that sends marks its own asynchronous flow instead.
+
 ## The database
 
 PostgreSQL holds all state, in two schemas:
@@ -131,14 +141,14 @@ PostgreSQL holds all state, in two schemas:
 | Schema | Content |
 |---|---|
 | `config` | Applications with their retention, API Key hashes, the keys of the sessions and, later, alert rules. Small, kept, backed up. |
-| `telemetry` | Log Events and, later, requests and dependencies. Large, written constantly, expires. |
+| `telemetry` | Log Events and spans: requests and dependencies. Large, written constantly, expires. |
 
 The split follows how the data is used. Log Events are stored in tables **partitioned by day** in UTC, so retention can drop whole partitions instead of deleting rows, which is fast and leaves no bloat. Their properties are stored as `jsonb` with a GIN index, so you can search by any property your application logs.
 
-Deleting an Application deletes its Log Events, because logs can contain personal data, and "delete" should mean it. They have no foreign key to their Application: a cascade would delete them all in one long transaction, and the key would be checked for every inserted row. Instead, the Application goes first, so its API Keys stop working, and then its Log Events go in small steps, so an interrupted request keeps its progress and repeating it finishes the job. Log Events still in the queue cannot slip through: each write first locks the Applications it writes for and discards Log Events whose Application is gone, while a deletion waits for writes in progress and then removes their rows too.
+Deleting an Application deletes its Log Events and spans, because logs can contain personal data, and "delete" should mean it. They have no foreign key to their Application: a cascade would delete them all in one long transaction, and the key would be checked for every inserted row. Instead, the Application goes first, so its API Keys stop working, and then its Log Events go in small steps, so an interrupted request keeps its progress and repeating it finishes the job. Log Events still in the queue cannot slip through: each write first locks the Applications it writes for and discards Log Events whose Application is gone, while a deletion waits for writes in progress and then removes their rows too.
 
 Logbook never changes its schema at startup. Migrations are a separate, explicit step (the `migrator` container image or `dotnet ef database update`), so a deployment never alters the database by accident and the application user needs no rights to change the schema.
 
-Partitions are the one thing that has to appear while Logbook runs, because new days keep coming. A database function created by the migrations makes the partition for a day when the first Log Event of that day arrives. It runs with the rights of the user that applied the migrations, so the application user only needs to be allowed to call it. The application user does need `USAGE` on the schema `telemetry` and `SELECT`, `INSERT` and `DELETE` on `telemetry.log_events`. Only days inside the accepted time window of a Log Event get a partition, so a sender cannot create an unlimited number of tables. The application user also needs `SELECT` and `INSERT` on `config.data_protection_keys`.
+Partitions are the one thing that has to appear while Logbook runs, because new days keep coming. A database function created by the migrations makes the partition for a day when the first Log Event of that day arrives. It runs with the rights of the user that applied the migrations, so the application user only needs to be allowed to call it. The application user does need `USAGE` on the schema `telemetry` and `SELECT`, `INSERT` and `DELETE` on `telemetry.log_events` and `telemetry.spans`. Only days inside the accepted time window of a Log Event get a partition, so a sender cannot create an unlimited number of tables. The application user also needs `SELECT` and `INSERT` on `config.data_protection_keys`.
 
 Retention has to deal with a mismatch: a partition holds one day of all Applications, while each Application has its own retention. A background service therefore does two things. It drops the partitions that have expired for every Application, using another such function, one at a time and giving up quickly if a long search holds the table, because everything else would queue up behind a waiting `DROP`. Then it deletes the rest row by row in small steps, for Applications with a shorter retention than the longest one. Every drop and every step reads the retention again and holds it until it is done, as logs that an administrator just decided to keep must not be lost to a run that started earlier, and a change of the retention only waits for that moment. So what you pay for depends on your settings: if all Applications keep logs equally long, retention costs almost nothing, whereas one with a much shorter retention than the others costs deletes and vacuuming. The Application with the longest retention keeps Log Events until their whole day has expired, up to a day longer, which saves it those deletes.

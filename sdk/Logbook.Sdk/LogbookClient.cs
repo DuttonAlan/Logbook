@@ -12,13 +12,23 @@ namespace Logbook.Sdk;
 ///     <see cref="LogbookOptions.ShutdownTimeout"/>. With options it cannot work with, e.g. without an
 ///     <see cref="LogbookOptions.Endpoint"/>, it stays disabled and ignores all events. Create one client and keep it for
 ///     the lifetime of the application. What it does can be followed through the <c>EventSource</c> named <c>Logbook-Sdk</c>.
+///     Log Events and spans have a buffer each, with the same limits, because they go to different endpoints, and so that
+///     requests of a busy application cannot push out the Log Events that explain what went wrong.
 /// </remarks>
 public sealed class LogbookClient : IDisposable
 {
-    private readonly LogEventBuffer? _buffer;
-    private readonly LogEventSender? _sender;
-    private readonly LogEventLimits? _limits;
+    private const string LogsPath = "/api/v1/logs";
+    private const string SpansPath = "/api/v1/spans";
 
+    private readonly TelemetryBuffer<LogbookEvent>? _buffer;
+    private readonly TelemetrySender<LogbookEvent>? _sender;
+    private readonly LogEventLimits? _limits;
+    private readonly TelemetryBuffer<LogbookSpan>? _spanBuffer;
+    private readonly TelemetrySender<LogbookSpan>? _spanSender;
+    private readonly HttpClient? _httpClient;
+    private readonly TimeSpan _shutdownTimeout;
+
+    private int _spanSenderStarted;
     private int _disposed;
 
     /// <summary>
@@ -50,19 +60,39 @@ public sealed class LogbookClient : IDisposable
         {
             var limits = new LogEventLimits(options!);
 
-            var buffer = new LogEventBuffer(
-                options!.MaxQueueSize,
-                options.MaxQueueBytes,
-                options.BatchSize,
-                options.MaxRequestBytes,
+#pragma warning disable CA2000 // The HttpClient owns the handler and disposes it.
+            var httpClient = new HttpClient(handler ?? CreateDefaultHandler()) { Timeout = options!.RequestTimeout };
+#pragma warning restore CA2000
+
+            var buffer = CreateBuffer<LogbookEvent>(options, timeProvider);
+            var spanBuffer = CreateBuffer<LogbookSpan>(options, timeProvider);
+
+            var sender = new TelemetrySender<LogbookEvent>(
+                options,
+                httpClient,
+                LogsPath,
+                buffer,
+                (events, now) => LogEventBatchWriter.Write(events, limits, now),
                 timeProvider);
 
-            var sender = new LogEventSender(options, limits, buffer, handler, timeProvider);
+            // Started with the first span, as most applications without request tracking never send one.
+            var spanSender = new TelemetrySender<LogbookSpan>(
+                options,
+                httpClient,
+                SpansPath,
+                spanBuffer,
+                (spans, now) => SpanBatchWriter.Write(spans, limits, now),
+                timeProvider);
+
             sender.Start();
 
             _limits = limits;
             _buffer = buffer;
             _sender = sender;
+            _spanBuffer = spanBuffer;
+            _spanSender = spanSender;
+            _httpClient = httpClient;
+            _shutdownTimeout = options.ShutdownTimeout;
         }
 #pragma warning disable CA1031 // The client must never throw into the host application.
         catch (Exception exception)
@@ -81,7 +111,12 @@ public sealed class LogbookClient : IDisposable
     /// <summary>
     ///     The buffer of the client, or null if it is disabled.
     /// </summary>
-    internal LogEventBuffer? Buffer => _buffer;
+    internal TelemetryBuffer<LogbookEvent>? Buffer => _buffer;
+
+    /// <summary>
+    ///     The buffer of the spans, or null if the client is disabled.
+    /// </summary>
+    internal TelemetryBuffer<LogbookSpan>? SpanBuffer => _spanBuffer;
 
     /// <summary>
     ///     Adds an event to the buffer and returns immediately, dropping the oldest events if the buffer is full.
@@ -111,6 +146,37 @@ public sealed class LogbookClient : IDisposable
     }
 
     /// <summary>
+    ///     Adds a span to its buffer and returns immediately, dropping the oldest spans if the buffer is full.
+    /// </summary>
+    /// <param name="span">The span. Null is ignored.</param>
+    public void Enqueue(LogbookSpan span)
+    {
+        if (span is null || Volatile.Read(ref _disposed) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            if (_spanBuffer is not null)
+            {
+                _spanBuffer.Add(span);
+
+                if (Interlocked.Exchange(ref _spanSenderStarted, 1) == 0)
+                {
+                    _spanSender!.Start();
+                }
+            }
+        }
+#pragma warning disable CA1031 // The client must never throw into the host application.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+            // E.g. out of memory while the buffer grows. Losing one span is better than failing the caller.
+        }
+    }
+
+    /// <summary>
     ///     Sends the remaining events and stops sending in the background. This waits for at most
     ///     <see cref="LogbookOptions.ShutdownTimeout"/>. Events that could not be sent by then are lost.
     /// </summary>
@@ -123,7 +189,22 @@ public sealed class LogbookClient : IDisposable
 
         try
         {
-            _sender?.Dispose();
+            if (_sender is null)
+            {
+                return;
+            }
+
+            // At the same time, as the host application must wait for the timeout once, not once for each.
+            var stoppingSpans = Task.Run(_spanSender!.Dispose);
+
+            _sender.Dispose();
+            stoppingSpans.Wait(_shutdownTimeout);
+
+            _ = Task.WhenAll(_sender.Completion, _spanSender.Completion).ContinueWith(
+                _ => _httpClient!.Dispose(),
+                CancellationToken.None,
+                TaskContinuationOptions.None,
+                TaskScheduler.Default);
         }
 #pragma warning disable CA1031 // The client must never throw into the host application.
         catch (Exception)
@@ -131,5 +212,35 @@ public sealed class LogbookClient : IDisposable
         {
             // Disposing must not fail the shutdown of the host application.
         }
+    }
+
+    /// <summary>
+    ///     Creates the handler used outside of tests.
+    /// </summary>
+    /// <returns>The handler.</returns>
+    /// <remarks>
+    ///     Redirects are not followed: following one turns the POST into a GET, whose <c>200</c> would look like delivered
+    ///     events, and could send the API Key to another host.
+    /// </remarks>
+    internal static HttpMessageHandler CreateDefaultHandler()
+    {
+        if (SocketsHttpHandler.IsSupported)
+        {
+            // With a long-lived HttpClient, the lifetime lets a server that moved to another address be found again.
+            return new SocketsHttpHandler { AllowAutoRedirect = false, PooledConnectionLifetime = TimeSpan.FromMinutes(5) };
+        }
+
+        return new HttpClientHandler { AllowAutoRedirect = false };
+    }
+
+    private static TelemetryBuffer<T> CreateBuffer<T>(LogbookOptions options, TimeProvider timeProvider)
+        where T : ITelemetryItem
+    {
+        return new TelemetryBuffer<T>(
+            options.MaxQueueSize,
+            options.MaxQueueBytes,
+            options.BatchSize,
+            options.MaxRequestBytes,
+            timeProvider);
     }
 }

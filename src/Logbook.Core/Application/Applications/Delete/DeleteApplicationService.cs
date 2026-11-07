@@ -13,14 +13,16 @@ namespace Logbook.Core.Application.Applications.Delete;
 /// </summary>
 /// <param name="applicationRepository">An Instance of a IApplicationRepository to delete an Application.</param>
 /// <param name="logEventRepository">An Instance of a ILogEventRepository to delete the Log Events of the Application.</param>
+/// <param name="spanRepository">An Instance of a ISpanRepository to delete the spans of the Application.</param>
 /// <param name="logger">The Logger to record the deletion.</param>
 public sealed class DeleteApplicationService(
     IApplicationRepository applicationRepository,
     ILogEventRepository logEventRepository,
+    ISpanRepository spanRepository,
     ILogger<DeleteApplicationService> logger)
 {
     /// <summary>
-    ///     Deletes an Application based on the Id, including its API Keys and Log Events.
+    ///     Deletes an Application based on the Id, including its API Keys, Log Events and spans.
     /// </summary>
     /// <remarks>
     ///     The Application goes first, so its API Keys stop working and no more Log Events can arrive. Deleting many Log
@@ -29,7 +31,7 @@ public sealed class DeleteApplicationService(
     /// </remarks>
     /// <param name="id">Id of the Application.</param>
     /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
-    /// <returns>A Task that completes once the Application and its Log Events are deleted.</returns>
+    /// <returns>A Task that completes once the Application and everything it sent is deleted.</returns>
     public async Task ExecuteAsync(
         Guid id,
         CancellationToken cancellationToken = default)
@@ -48,6 +50,13 @@ public sealed class DeleteApplicationService(
         if (deleted > 0)
         {
             logger.LogEventsOfApplicationDeleted(id, deleted);
+        }
+
+        var deletedSpans = await spanRepository.DeleteByApplication(id, cancellationToken);
+
+        if (deletedSpans > 0)
+        {
+            logger.SpansOfApplicationDeleted(id, deletedSpans);
         }
     }
 }

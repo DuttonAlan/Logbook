@@ -24,6 +24,7 @@ namespace Logbook.Core.Application.LogEvents.Search;
 /// <param name="TraceId" example="4bf92f3577b34da6a3ce929d0e0e4736">The W3C Trace Id.</param>
 /// <param name="SpanId" example="00f067aa0ba902b7">The W3C Span Id.</param>
 /// <param name="Properties">The structured properties as a JSON object.</param>
+/// <param name="ExceptionFingerprint" example="9f86d081884c7d659a2feaa0c55ad015">What identifies the failure of the exception. Log Events with the same value form a group.</param>
 public sealed record LogEventResponse(
     Guid Id,
     Guid ApplicationId,
@@ -37,7 +38,8 @@ public sealed record LogEventResponse(
     JsonElement? Exception,
     string? TraceId,
     string? SpanId,
-    JsonElement? Properties)
+    JsonElement? Properties,
+    string? ExceptionFingerprint)
 {
     /// <summary>
     ///     Creates the response for a stored Log Event.
@@ -61,7 +63,8 @@ public sealed record LogEventResponse(
             ToJson(logEvent.Exception),
             logEvent.TraceId,
             logEvent.SpanId,
-            ToJson(logEvent.Properties));
+            ToJson(logEvent.Properties),
+            logEvent.ExceptionFingerprint);
     }
 
     // As an element, so the response contains the JSON itself and not a string with escaped JSON.

@@ -17,6 +17,7 @@ using Logbook.Core.Application.LogEvents.Ingest;
 using Logbook.Core.Application.LogEvents.Search;
 using Logbook.Core.Application.LogEvents.Tail;
 using Logbook.Core.Domain.Entities;
+using Logbook.Core.Domain.ValueObjects;
 
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -70,6 +71,7 @@ public sealed class LogsController(
     /// <param name="text" example="order failed">Only Log Events whose message contains these words. Supports "exact phrases", OR, and -excluded words.</param>
     /// <param name="traceId" example="4bf92f3577b34da6a3ce929d0e0e4736">Only Log Events of this trace, compared exactly.</param>
     /// <param name="properties" example="OrderId=42">Only Log Events with this top-level property, as Name=Value. Can be repeated, and all must match.</param>
+    /// <param name="exceptionFingerprint" example="9f86d081884c7d659a2feaa0c55ad015">Only Log Events with an exception of this group, compared exactly.</param>
     /// <param name="cursor">The <c>nextCursor</c> of the previous page.</param>
     /// <param name="limit" example="100">The maximum number of Log Events on the page, at most 1000.</param>
     /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
@@ -93,11 +95,12 @@ public sealed class LogsController(
         [FromQuery, StringLength(MaxSearchTextLength)] string? text = null,
         [FromQuery, StringLength(LogEvent.TraceFieldMaxLength)] string? traceId = null,
         [FromQuery(Name = "property"), MaxLength(MaxPropertyFilters)] string?[]? properties = null,
+        [FromQuery, StringLength(ExceptionFingerprint.Length)] string? exceptionFingerprint = null,
         [FromQuery, StringLength(MaxCursorLength)] string? cursor = null,
         [FromQuery, Range(1, MaxLimit)] int limit = 100,
         CancellationToken cancellationToken = default)
     {
-        var filter = new LogEventFilter(from, to, levels, applicationId, environment, text, traceId, ParseProperties(properties));
+        var filter = new LogEventFilter(from, to, levels, applicationId, environment, text, traceId, ParseProperties(properties), exceptionFingerprint);
 
         return Ok(await searchLogEventsService.ExecuteAsync(filter, cursor, limit, cancellationToken));
     }
@@ -117,6 +120,7 @@ public sealed class LogsController(
     /// <param name="text" example="order failed">Only Log Events whose message contains these words. Supports "exact phrases", OR, and -excluded words.</param>
     /// <param name="traceId" example="4bf92f3577b34da6a3ce929d0e0e4736">Only Log Events of this trace, compared exactly.</param>
     /// <param name="properties" example="OrderId=42">Only Log Events with this top-level property, as Name=Value. Can be repeated, and all must match.</param>
+    /// <param name="exceptionFingerprint" example="9f86d081884c7d659a2feaa0c55ad015">Only Log Events with an exception of this group, compared exactly.</param>
     /// <returns>200 OK with the stream.</returns>
     /// <response code="200">Responds with the stream of server-sent events.</response>
     /// <response code="400">Responds with problem details if a parameter is not valid, e.g. an unknown level.</response>
@@ -132,9 +136,10 @@ public sealed class LogsController(
         [FromQuery, StringLength(LogEvent.EnvironmentMaxLength)] string? environment = null,
         [FromQuery, StringLength(MaxSearchTextLength)] string? text = null,
         [FromQuery, StringLength(LogEvent.TraceFieldMaxLength)] string? traceId = null,
-        [FromQuery(Name = "property"), MaxLength(MaxPropertyFilters)] string?[]? properties = null)
+        [FromQuery(Name = "property"), MaxLength(MaxPropertyFilters)] string?[]? properties = null,
+        [FromQuery, StringLength(ExceptionFingerprint.Length)] string? exceptionFingerprint = null)
     {
-        var filter = new LogEventFilter(null, null, levels, applicationId, environment, text, traceId, ParseProperties(properties));
+        var filter = new LogEventFilter(null, null, levels, applicationId, environment, text, traceId, ParseProperties(properties), exceptionFingerprint);
 
         // Without this, nginx holds the events back in its buffer by default, and the stream looks silent.
         Response.Headers["X-Accel-Buffering"] = "no";
