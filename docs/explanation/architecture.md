@@ -38,7 +38,21 @@ An Application is a program that sends its logs to Logbook. It authenticates wit
 
 An API Key is a 256-bit random value. Logbook shows it once when it is issued and stores only its SHA-256 hash, so a leaked database does not reveal any usable key. A fast hash is enough here, unlike for passwords, because a random value of that size cannot be guessed. The first API Key of an Application and any key issued without an expiry stay valid until they are revoked: an expired key would make an application silently lose its logs, because the SDK drops what it cannot send rather than disturb the application.
 
-The admin API that manages them is protected by a single key from the configuration, sent as a Bearer token. It is deliberately simple, because it only has to hold until sign-in arrives in milestone M4. Logbook refuses to start without it, so an unprotected admin API cannot happen by accident. The key is separate from API Keys in both directions: an API Key can never manage Logbook.
+## Signing in
+
+People sign in, either as the local administrator or through an OpenID Connect provider, and everyone who does has full access. There are no roles, because Logbook's job is simple enough that one level of access covers it, and roles can come when there is a need. Logbook refuses to start if nobody could sign in, so an unprotected admin API cannot happen by accident. Sessions and API Keys are separate in both directions: an API Key can never manage Logbook or read logs, and a session cannot send Log Events.
+
+The local administrator exists in the configuration, not in the database. That makes the first start safe, as there is no moment when whoever comes first creates the account, and it is the same kind of secret as the password of the database, next to it. The cost is that changing the password takes a restart. With OpenID Connect, a claim decides who gets access, and setting one is required, because a provider's job is to say who someone is, and many let anyone register.
+
+A session is a cookie, encrypted and signed with keys from the database, so it works on every server and survives a restart. The cookie is out of reach for scripts on the page, which matters because anyone with an API Key can decide what Log Events contain. To reach it, an attacker would have to make the browser send a request from another site, which `SameSite=Strict` prevents, and for a neighbor on the same domain, the required header `X-Requested-With` does. A session lasts a fixed time rather than extending with use, because the web interface polls the health of the server, so an open tab would stay signed in forever. For the same reason a live tail ends when its session does, as it was only authorized once, when it started. The session holds no state on the server, so signing out removes the cookie from the browser but cannot revoke a copy. That is the price for needing no database lookup on each request, and it is bounded by the lifetime.
+
+Monitoring tools cannot sign in, and need less than a person. They have a key of their own, which opens the detailed health report and nothing else.
+
+## Running in production
+
+Secure settings are not left to a checklist where a mistake is easy to make and hard to notice. In `Production`, which is what an image runs in unless told otherwise, Logbook [refuses to start](../reference/configuration.md#production-checks) if it would serve other hosts over plain HTTP, or still has a setting meant for development. Every response carries security headers, most importantly a content security policy that allows only scripts from Logbook itself, as a second line of defense behind rendering Log Events as text.
+
+Logbook does not terminate TLS by default, and a [reverse proxy](../how-to/reverse-proxy.md) does that better. For it to see the address of the client and the protocol it used, it has to trust the forwarded headers, but only from known proxies, as anyone else could claim any address and escape a rate limit.
 
 ## Receiving Log Events
 
@@ -60,7 +74,7 @@ What happens when a write fails depends on the cause. If the database is unavail
 
 ## Searching Log Events
 
-Searching requires the admin key, not an API Key. An API Key lives in an application's configuration and on servers, so it is the credential most likely to leak; if it could read logs, one leak would expose everything those logs contain.
+Searching requires a session, not an API Key. An API Key lives in an application's configuration and on servers, so it is the credential most likely to leak; if it could read logs, one leak would expose everything those logs contain.
 
 Results are paged with a cursor, a position in the order of `Timestamp` and `Id`, rather than with page numbers. An offset would have to read and skip all earlier rows, so it gets slower with every page, and new Log Events would shift the results between requests. For the same reason there is no total count: on a table this size, counting is the expensive part.
 
@@ -84,7 +98,7 @@ A stream never ends by itself, so each one ends when the server starts to stop. 
 
 The filters of the log explorer live in the URL rather than in the state of a component, so a search survives a reload and can be shared. Logs are large and arrive without end, so the list renders only the rows in view, and a live tail keeps a limited number of Log Events and renders new ones a few times per second instead of for each one.
 
-A live tail cannot use the `EventSource` of the browser, because it cannot send an `Authorization` header. The only way around that would be the admin key in the URL, where it would end up in the logs of every proxy, so the stream is read with `fetch`. The admin key stays in `sessionStorage`, so that a reload does not ask for it again, but closing the tab ends it. A script running on the page could read it from there, so everything that comes from a Log Event is rendered as text, never as HTML: anyone with an API Key can decide what these Log Events contain.
+Anyone with an API Key can decide what Log Events contain, so everything that comes from a Log Event is rendered as text, never as HTML. The session cookie is out of reach for scripts on the page, and the content security policy keeps a script that gets in anyway from sending anything to another server.
 
 During development the Vite server runs on its own port and forwards API calls to the server, so changes appear without a rebuild.
 
@@ -116,13 +130,15 @@ PostgreSQL holds all state, in two schemas:
 
 | Schema | Content |
 |---|---|
-| `config` | Applications, API Key hashes, retention settings and, later, alert rules. Small, kept, backed up. |
+| `config` | Applications with their retention, API Key hashes, the keys of the sessions and, later, alert rules. Small, kept, backed up. |
 | `telemetry` | Log Events and, later, requests and dependencies. Large, written constantly, expires. |
 
-The split follows how the data is used. Log Events are stored in tables **partitioned by day** in UTC, so retention drops whole partitions instead of deleting rows, which is fast and leaves no bloat. Their properties are stored as `jsonb` with a GIN index, so you can search by any property your application logs.
+The split follows how the data is used. Log Events are stored in tables **partitioned by day** in UTC, so retention can drop whole partitions instead of deleting rows, which is fast and leaves no bloat. Their properties are stored as `jsonb` with a GIN index, so you can search by any property your application logs.
 
 Deleting an Application deletes its Log Events, because logs can contain personal data, and "delete" should mean it. They have no foreign key to their Application: a cascade would delete them all in one long transaction, and the key would be checked for every inserted row. Instead, the Application goes first, so its API Keys stop working, and then its Log Events go in small steps, so an interrupted request keeps its progress and repeating it finishes the job. Log Events still in the queue cannot slip through: each write first locks the Applications it writes for and discards Log Events whose Application is gone, while a deletion waits for writes in progress and then removes their rows too.
 
 Logbook never changes its schema at startup. Migrations are a separate, explicit step (the `migrator` container image or `dotnet ef database update`), so a deployment never alters the database by accident and the application user needs no rights to change the schema.
 
-Partitions are the one thing that has to appear while Logbook runs, because new days keep coming. A database function created by the migrations makes the partition for a day when the first Log Event of that day arrives. It runs with the rights of the user that applied the migrations, so the application user only needs to be allowed to call it. The application user does need `USAGE` on the schema `telemetry` and `SELECT`, `INSERT` and `DELETE` on `telemetry.log_events`. Only days inside the accepted time window of a Log Event get a partition, so a sender cannot create an unlimited number of tables.
+Partitions are the one thing that has to appear while Logbook runs, because new days keep coming. A database function created by the migrations makes the partition for a day when the first Log Event of that day arrives. It runs with the rights of the user that applied the migrations, so the application user only needs to be allowed to call it. The application user does need `USAGE` on the schema `telemetry` and `SELECT`, `INSERT` and `DELETE` on `telemetry.log_events`. Only days inside the accepted time window of a Log Event get a partition, so a sender cannot create an unlimited number of tables. The application user also needs `SELECT` and `INSERT` on `config.data_protection_keys`.
+
+Retention has to deal with a mismatch: a partition holds one day of all Applications, while each Application has its own retention. A background service therefore does two things. It drops the partitions that have expired for every Application, using another such function, one at a time and giving up quickly if a long search holds the table, because everything else would queue up behind a waiting `DROP`. Then it deletes the rest row by row in small steps, for Applications with a shorter retention than the longest one. So what you pay for depends on your settings: if all Applications keep logs equally long, retention costs almost nothing, whereas one with a much shorter retention than the others costs deletes and vacuuming. The Application with the longest retention keeps Log Events until their whole day has expired, up to a day longer, which saves it those deletes.

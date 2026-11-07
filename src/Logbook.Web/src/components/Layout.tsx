@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, Outlet } from '@tanstack/react-router'
-import { clearAdminKey } from '../auth/adminKey.ts'
+import { useSyncExternalStore } from 'react'
+import { signOut } from '../api/auth.ts'
+import { getSession, signedOut, subscribeToSession } from '../auth/session.ts'
 
 interface HealthResponse {
   status: 'Healthy' | 'Degraded' | 'Unhealthy'
@@ -33,6 +35,17 @@ function ServerStatus() {
 }
 
 export function Layout() {
+  const userName = useSyncExternalStore(subscribeToSession, () => getSession()?.userName)
+
+  async function leave() {
+    try {
+      await signOut()
+    } finally {
+      // Also if it failed, as what is on the screen should go away at once. An answer of 401 means it is over anyway.
+      signedOut()
+    }
+  }
+
   return (
     <div className="app">
       <header className="topbar">
@@ -47,8 +60,9 @@ export function Layout() {
         </nav>
         <div className="topbar-end">
           <ServerStatus />
-          <button type="button" className="button small quiet" onClick={clearAdminKey}>
-            Forget admin key
+          {userName && <span className="hint">{userName}</span>}
+          <button type="button" className="button small quiet" onClick={() => void leave()}>
+            Sign out
           </button>
         </div>
       </header>

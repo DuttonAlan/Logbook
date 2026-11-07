@@ -24,6 +24,10 @@ export function renameApplication(id: string, name: string) {
   return postJson<void>(`${BASE}/${id}`, { name }, 'PUT')
 }
 
+export function changeRetention(id: string, retentionDays: number | null) {
+  return postJson<void>(`${BASE}/${id}/retention`, { retentionDays }, 'PUT')
+}
+
 export async function deleteApplication(id: string) {
   await send(`${BASE}/${id}`, { method: 'DELETE' })
 }

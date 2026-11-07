@@ -3,8 +3,8 @@ export interface ServerSentEvent {
   data: string
 }
 
-// Reads a stream of server-sent events. EventSource cannot be used, as it cannot send the Authorization header, and the
-// only alternative would be to put the admin key into the URL, where it ends up in the logs of every proxy.
+// Reads a stream of server-sent events. Not with EventSource, as it would hide the status of a response, which tells a
+// session that has expired from a server that is gone, and it reconnects on its own after any failure.
 export async function readServerSentEvents(body: ReadableStream<Uint8Array<ArrayBuffer>>, onEvent: (event: ServerSentEvent) => void) {
   const reader = body.pipeThrough(new TextDecoderStream()).getReader()
 

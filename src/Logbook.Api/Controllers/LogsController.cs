@@ -18,6 +18,7 @@ using Logbook.Core.Application.LogEvents.Search;
 using Logbook.Core.Application.LogEvents.Tail;
 using Logbook.Core.Domain.Entities;
 
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -37,6 +38,7 @@ namespace Logbook.Api.Controllers;
 /// <param name="tailLogEventsService">The Service to follow new Log Events.</param>
 /// <param name="applicationLifetime">Tells when the server stops, which must end the live tails.</param>
 /// <param name="jsonOptions">The JSON settings of the responses, which the live tail must share with the search.</param>
+/// <param name="timeProvider">The clock, to end a live tail when its session expires.</param>
 [ApiController]
 [Route("api/v1/logs")]
 [Tags("Logs")]
@@ -45,7 +47,8 @@ public sealed class LogsController(
     SearchLogEventsService searchLogEventsService,
     TailLogEventsService tailLogEventsService,
     IHostApplicationLifetime applicationLifetime,
-    IOptions<JsonOptions> jsonOptions) : ControllerBase
+    IOptions<JsonOptions> jsonOptions,
+    TimeProvider timeProvider) : ControllerBase
 {
     private const int MaxLimit = 1000;
     private const int MaxSearchTextLength = 500;
@@ -57,7 +60,7 @@ public sealed class LogsController(
     /// </summary>
     /// <remarks>
     ///     All filters are optional and must all match. To get the next page, send the same filters again with the
-    ///     <c>nextCursor</c> of the response. This requires the admin key: an API Key can only send Log Events.
+    ///     <c>nextCursor</c> of the response. This requires a session: an API Key can only send Log Events.
     /// </remarks>
     /// <param name="from" example="2026-11-04T00:00:00Z">Only Log Events at or after this point in time.</param>
     /// <param name="to" example="2026-11-05T00:00:00Z">Only Log Events before this point in time.</param>
@@ -105,8 +108,8 @@ public sealed class LogsController(
     /// <remarks>
     ///     The filters work as in the search. The stream sends the event <c>connected</c> once it is following, <c>log</c>
     ///     with a Log Event in the format of the search, <c>gap</c> if Log Events were skipped because they arrive too fast,
-    ///     and <c>heartbeat</c> every 15 seconds when nothing else is sent. It ends when the server stops. This requires the
-    ///     admin key.
+    ///     and <c>heartbeat</c> every 15 seconds when nothing else is sent. It ends when the server stops or the session expires.
+    ///     This requires a session.
     /// </remarks>
     /// <param name="levels" example="Error">Only Log Events with this level. Can be repeated to allow several levels.</param>
     /// <param name="applicationId" example="0199d1a2-7c3e-7b4a-9f10-5c963f66afa6">Only Log Events of this Application.</param>
@@ -123,7 +126,7 @@ public sealed class LogsController(
     [ProducesResponseType<string>(StatusCodes.Status200OK, "text/event-stream")]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
-    public IResult Stream(
+    public async Task<IResult> Stream(
         [FromQuery(Name = "level")] LogEventLevel[]? levels = null,
         [FromQuery] Guid? applicationId = null,
         [FromQuery, StringLength(LogEvent.EnvironmentMaxLength)] string? environment = null,
@@ -136,7 +139,9 @@ public sealed class LogsController(
         // Without this, nginx holds the events back in its buffer by default, and the stream looks silent.
         Response.Headers["X-Accel-Buffering"] = "no";
 
-        return TypedResults.ServerSentEvents(ReadTailAsync(filter, HttpContext.RequestAborted));
+        var session = await HttpContext.AuthenticateAsync(SessionAuthentication.SchemeName);
+
+        return TypedResults.ServerSentEvents(ReadTailAsync(filter, session.Properties?.ExpiresUtc, HttpContext.RequestAborted));
     }
 
     /// <summary>
@@ -178,11 +183,20 @@ public sealed class LogsController(
 
     private static LogEventPropertyFilter[]? ParseProperties(string?[]? properties) => properties?.Select(LogEventPropertyFilter.Parse).ToArray();
 
-    private async IAsyncEnumerable<SseItem<string>> ReadTailAsync(LogEventFilter filter, [EnumeratorCancellation] CancellationToken requestAborted)
+    private async IAsyncEnumerable<SseItem<string>> ReadTailAsync(
+        LogEventFilter filter,
+        DateTimeOffset? sessionExpiresAt,
+        [EnumeratorCancellation] CancellationToken requestAborted)
     {
         // A stream never ends by itself, so it would hold up a graceful shutdown until the time for it is over, which is
         // also the time the server needs to write the Log Events that are left in the queue.
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(requestAborted, applicationLifetime.ApplicationStopping);
+
+        // Authorization only ran when the stream started, and a session must not read logs for longer than it lasts.
+        if (sessionExpiresAt is { } expiresAt)
+        {
+            stop.CancelAfter(TimeSpan.FromTicks(Math.Max(0, (expiresAt - timeProvider.GetUtcNow()).Ticks)));
+        }
 
         await using var messages = tailLogEventsService.ExecuteAsync(filter, stop.Token).GetAsyncEnumerator(stop.Token);
 

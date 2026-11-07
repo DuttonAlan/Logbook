@@ -2,9 +2,34 @@
 
 The admin API manages the Applications that send logs to Logbook and their API Keys. To use it step by step, see [Manage Applications and API Keys](../how-to/manage-applications.md).
 
-- **Authentication:** the admin key from the setting [`AdminApi:Key`](configuration.md#server), as `Authorization: Bearer …`. Without a valid key every endpoint returns `401`. API Keys of Applications are not accepted. The admin key is replaced by sign-in in milestone M4.
-- **Format:** JSON in and out; points in time in UTC. Errors are [problem details](https://www.rfc-editor.org/rfc/rfc9457): `400` (validation), `401`, `404`, `409` (conflict with the current state), `415` (a request body that is not JSON), `503` (the database cannot be reached, with a `Retry-After` header).
+- **Authentication:** a session from [signing in](#sign-in), in the cookie `logbook.session`. Without a valid session every endpoint returns `401`. API Keys of Applications are not accepted.
+- **Changes:** requests other than `GET` also need the header `X-Requested-With`, with any value, or they return `403`. Another site cannot set this header in the browser of a signed-in user, so it cannot send such a request on their behalf.
+- **Format:** JSON in and out; points in time in UTC. Errors are [problem details](https://www.rfc-editor.org/rfc/rfc9457): `400` (validation), `401`, `403`, `404`, `409` (conflict with the current state), `415` (a request body that is not JSON), `503` (the database cannot be reached, with a `Retry-After` header).
 - **Schema:** the OpenAPI document and Swagger UI (`/swagger`) are served in `Development`.
+
+## Sign-in
+
+To set it up, see [Configure sign-in](../how-to/configure-sign-in.md).
+
+| Endpoint | Success | Description |
+|---|---|---|
+| `GET /api/v1/auth/session` | `200` | Who is signed in, and how someone can sign in. Works without a session. |
+| `POST /api/v1/auth/sign-in` | `204` | Signs in the local administrator with `userName` and `password`, and sets the session cookie. `401` if they are wrong or the local administrator is turned off, `429` with `Retry-After` after too many failures from one IP address ([`RateLimiting:InvalidSignInPermitsPerMinute`](configuration.md#server)). |
+| `POST /api/v1/auth/sign-out` | `204` | Removes the session cookie from the browser. It does not revoke the session: a copy of the cookie works until it expires. |
+| `GET /api/v1/auth/oidc/sign-in` | `302` | Redirects to the OpenID Connect provider, for a browser. The optional `returnUrl` is a path on this server to continue at. `404` if this sign-in is off. |
+
+`GET /api/v1/auth/session` returns:
+
+```json
+{
+  "isSignedIn": true,
+  "userName": "admin",
+  "canSignInWithPassword": true,
+  "openIdConnectProvider": "Authora"
+}
+```
+
+A session lasts for [`SignIn:SessionLifetime`](configuration.md#sign-in), however much it is used, and ends earlier when the password of the local administrator changes. The cookie is `HttpOnly` and `SameSite=Strict`, and `Secure` when the client uses HTTPS.
 
 ## Applications
 
@@ -14,6 +39,7 @@ The admin API manages the Applications that send logs to Logbook and their API K
 | `GET /api/v1/applications` | `200` | List, ordered by name. Returns a plain JSON array of `id`, `name` and `createdAt`. |
 | `GET /api/v1/applications/{id}` | `200` | Details, including the metadata of all API Keys. `404` if unknown. |
 | `PUT /api/v1/applications/{id}` | `204` | Rename, with `name`. API Keys stay valid. `404` if unknown, `409` if the name is taken. |
+| `PUT /api/v1/applications/{id}/retention` | `204` | Change how long its Log Events are kept, see [Retention](#retention). `404` if unknown. |
 | `DELETE /api/v1/applications/{id}` | `204` | Delete, together with its API Keys and Log Events. Also succeeds if the Application does not exist. With many Log Events this can take a while. If the request is interrupted, send it again to finish deleting them. |
 
 An Application's `name` has 1 to 100 characters, is trimmed, and must be unique. Names are compared exactly, so `Shop` and `shop` are different names.
@@ -48,9 +74,17 @@ An Application's `name` has 1 to 100 characters, is trimmed, and must be unique.
     }
   ],
   "createdAt": "2026-11-04T10:15:00.123Z",
-  "modifiedAt": null
+  "modifiedAt": null,
+  "retentionDays": null,
+  "effectiveRetentionDays": 30
 }
 ```
+
+## Retention
+
+The body of `PUT /api/v1/applications/{id}/retention` is `{"retentionDays": 14}`, from 1 to 3650, or `{"retentionDays": null}` to use the setting [`Retention:DefaultDays`](configuration.md#retention). Anything else returns `400`.
+
+In `GET /api/v1/applications/{id}`, `retentionDays` is what was set for this Application, and `effectiveRetentionDays` is what applies. Log Events past it are removed by the next retention run, and cannot be recovered.
 
 ## API Keys
 

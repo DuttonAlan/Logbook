@@ -1,4 +1,4 @@
-import { getAdminKey, rejectAdminKey } from '../auth/adminKey.ts'
+import { expireSession } from '../auth/session.ts'
 
 interface ProblemDetails {
   title?: string
@@ -31,13 +31,11 @@ async function toApiError(response: Response): Promise<ApiError> {
   return new ApiError(response.status, message ?? `The server answered with status ${response.status}.`)
 }
 
-// Sends the request with the stored key, or with the given one to try a key before storing it.
-export async function send(path: string, init: RequestInit = {}, adminKey = getAdminKey()): Promise<Response> {
+// The browser adds the session cookie. Another site cannot set this header, which the server requires to change something.
+export async function send(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers)
 
-  if (adminKey) {
-    headers.set('Authorization', `Bearer ${adminKey}`)
-  }
+  headers.set('X-Requested-With', 'logbook-web')
 
   const response = await fetch(path, { ...init, headers })
 
@@ -45,8 +43,8 @@ export async function send(path: string, init: RequestInit = {}, adminKey = getA
     return response
   }
 
-  if (response.status === 401 && adminKey === getAdminKey()) {
-    rejectAdminKey()
+  if (response.status === 401) {
+    expireSession()
   }
 
   throw await toApiError(response)

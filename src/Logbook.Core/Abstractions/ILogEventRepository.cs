@@ -30,6 +30,25 @@ public interface ILogEventRepository
     public Task<long> DeleteByApplication(Guid applicationId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Deletes the Log Events of an Application older than a point in time, in several steps. If it is interrupted,
+    ///     calling it again finishes it.
+    /// </summary>
+    /// <param name="applicationId">Id of the Application.</param>
+    /// <param name="before">The point in time (UTC). Log Events before it are deleted.</param>
+    /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
+    /// <returns>The number of deleted Log Events.</returns>
+    public Task<long> DeleteOlderThan(Guid applicationId, DateTime before, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Drops the partition of the oldest day before the given day, with the Log Events of all Applications in it. One at
+    ///     a time, so that the lock on the table of all Log Events is released in between.
+    /// </summary>
+    /// <param name="day">The first day (UTC) to keep.</param>
+    /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
+    /// <returns>The day of the dropped partition, or null if no partition is older than the given day.</returns>
+    public Task<DateOnly?> DropOldestPartitionBefore(DateOnly day, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Searches Log Events, newest first.
     /// </summary>
     /// <param name="filter">The filters to apply.</param>

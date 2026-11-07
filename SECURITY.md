@@ -45,7 +45,7 @@ In scope: everything in this repository, including the log and query APIs, the w
 Out of scope:
 
 - vulnerabilities that need an already compromised host, database or administrator account;
-- missing features that are listed on the [roadmap](docs/roadmap.md), e.g. sign-in to the web interface before milestone M4;
+- missing features that are listed on the [roadmap](docs/roadmap.md);
 - denial of service through sheer request volume;
 - reports from automated scanners without a demonstrated impact.
 

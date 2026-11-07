@@ -3,8 +3,8 @@ import { RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ApiError } from './api/client.ts'
-import { getAdminKey, subscribeToAdminKey } from './auth/adminKey.ts'
-import { AdminKeyGate } from './auth/AdminKeyGate.tsx'
+import { getSession, subscribeToSession } from './auth/session.ts'
+import { SessionGate } from './auth/SessionGate.tsx'
 import './index.css'
 import { router } from './router.tsx'
 
@@ -18,19 +18,19 @@ const queryClient = new QueryClient({
   },
 })
 
-// Log Events and Applications do not stay in memory once the admin key is gone.
-subscribeToAdminKey(() => {
-  if (!getAdminKey()) {
+// Log Events and Applications do not stay in memory once the session is over.
+subscribeToSession(() => {
+  if (!getSession()?.isSignedIn) {
     queryClient.clear()
   }
 })
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AdminKeyGate>
+    <SessionGate>
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />
       </QueryClientProvider>
-    </AdminKeyGate>
+    </SessionGate>
   </StrictMode>,
 )

@@ -3,8 +3,13 @@
 // See the LICENSE file in the project root for license information.
 
 using System.Net;
+using System.Net.Http.Json;
 
+using Logbook.Api.Authentication;
+
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Logbook.Api.IntegrationTests;
 
@@ -14,9 +19,15 @@ namespace Logbook.Api.IntegrationTests;
 /// <param name="factory">The Api under test.</param>
 public sealed class DatabaseUnavailableTests(LogbookApiFactory factory) : IClassFixture<LogbookApiFactory>
 {
-    private WebApplicationFactory<Program> Unavailable => factory.WithWebHostBuilder(builder => builder.UseSetting(
-        "ConnectionStrings:Database",
-        "Host=localhost;Port=1;Database=none;Username=none;Password=none;Timeout=2"));
+    private const string UnreachableDatabase = "Host=localhost;Port=1;Database=none;Username=none;Password=none;Timeout=2";
+
+    // The keys of the sessions come from the database as well, so without this nobody could sign in to see the 503 of the
+    // other endpoints.
+    private WebApplicationFactory<Program> Unavailable => factory.WithWebHostBuilder(builder =>
+    {
+        builder.UseSetting("ConnectionStrings:Database", UnreachableDatabase);
+        builder.ConfigureServices(services => services.AddDataProtection().UseEphemeralDataProtectionProvider());
+    });
 
     [Fact]
     public async Task SendingLogEvents_IsServiceUnavailable_BecauseTheApiKeyCannotBeChecked()
@@ -35,10 +46,23 @@ public sealed class DatabaseUnavailableTests(LogbookApiFactory factory) : IClass
     [InlineData("/api/v1/applications")]
     public async Task AdminRequests_AreServiceUnavailable(string endpoint)
     {
-        using var client = Unavailable.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new("Bearer", LogbookApiFactory.AdminKey);
+        using var client = Unavailable.CreateAdminClient();
 
         using var response = await client.GetAsync(endpoint, TestContext.Current.CancellationToken);
+
+        await AssertServiceUnavailableAsync(response);
+    }
+
+    [Fact]
+    public async Task SigningIn_IsServiceUnavailable_BecauseTheKeysOfTheSessionsCannotBeRead()
+    {
+        using var unavailable = factory.WithWebHostBuilder(builder => builder.UseSetting("ConnectionStrings:Database", UnreachableDatabase));
+        using var client = unavailable.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/v1/auth/sign-in",
+            new SignInRequest(LogbookApiFactory.AdminUserName, LogbookApiFactory.AdminPassword),
+            TestContext.Current.CancellationToken);
 
         await AssertServiceUnavailableAsync(response);
     }

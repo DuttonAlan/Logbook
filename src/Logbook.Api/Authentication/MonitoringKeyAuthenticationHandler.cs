@@ -14,27 +14,27 @@ using Microsoft.Net.Http.Headers;
 namespace Logbook.Api.Authentication;
 
 /// <summary>
-///     Authenticates admin API requests by the configured admin key, sent as <c>Authorization: Bearer</c> (RFC 6750).
+///     Authenticates monitoring tools by the configured key, sent as <c>Authorization: Bearer</c> (RFC 6750).
 /// </summary>
 /// <remarks>
-///     This is the only access control of the admin API until sign-in exists (milestone M4). Cookies are not used, so
-///     the API cannot be called through cross-site requests of a browser. API Keys of Applications are not accepted.
+///     Monitoring tools cannot sign in, and need no more than the health report, which is the only endpoint that accepts
+///     this scheme. API Keys of Applications are not accepted.
 /// </remarks>
 /// <param name="options">The options of the scheme.</param>
 /// <param name="logger">The LoggerFactory of the handler.</param>
 /// <param name="encoder">The UrlEncoder of the handler.</param>
-/// <param name="adminApiOptions">The settings with the admin key.</param>
-public sealed class AdminKeyAuthenticationHandler(
+/// <param name="monitoringKeyOptions">The settings with the key.</param>
+public sealed class MonitoringKeyAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    IOptions<AdminApiOptions> adminApiOptions)
+    IOptions<MonitoringKeyOptions> monitoringKeyOptions)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     /// <summary>
     ///     Name of the authentication scheme.
     /// </summary>
-    public const string SchemeName = "LogbookAdminKey";
+    public const string SchemeName = "LogbookMonitoringKey";
 
     private const string BearerPrefix = "Bearer ";
 
@@ -48,12 +48,12 @@ public sealed class AdminKeyAuthenticationHandler(
             return Task.FromResult(AuthenticateResult.NoResult());
         }
 
-        if (!IsAdminKey(authorization[BearerPrefix.Length..].Trim()))
+        if (!IsMonitoringKey(authorization[BearerPrefix.Length..].Trim()))
         {
-            return Task.FromResult(AuthenticateResult.Fail("The admin key is not valid."));
+            return Task.FromResult(AuthenticateResult.Fail("The monitoring key is not valid."));
         }
 
-        var identity = new ClaimsIdentity([new Claim(ClaimTypes.Name, "admin")], SchemeName);
+        var identity = new ClaimsIdentity([new Claim(ClaimTypes.Name, "monitoring")], SchemeName);
 
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
     }
@@ -71,12 +71,18 @@ public sealed class AdminKeyAuthenticationHandler(
             result.Failure is null ? "Bearer" : "Bearer error=\"invalid_token\"");
     }
 
-    private bool IsAdminKey(string candidate)
+    private bool IsMonitoringKey(string candidate)
     {
-        // Comparing hashes in constant time reveals neither the content nor the length of the key.
-        var expected = SHA256.HashData(Encoding.UTF8.GetBytes(adminApiOptions.Value.Key));
-        var actual = SHA256.HashData(Encoding.UTF8.GetBytes(candidate));
+        var key = monitoringKeyOptions.Value.MonitoringKey;
 
-        return CryptographicOperations.FixedTimeEquals(actual, expected);
+        if (string.IsNullOrEmpty(key))
+        {
+            return false;
+        }
+
+        // Comparing hashes in constant time reveals neither the content nor the length of the key.
+        return CryptographicOperations.FixedTimeEquals(
+            SHA256.HashData(Encoding.UTF8.GetBytes(candidate)),
+            SHA256.HashData(Encoding.UTF8.GetBytes(key)));
     }
 }

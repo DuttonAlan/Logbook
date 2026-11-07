@@ -133,14 +133,36 @@ public sealed class LogEventRepository(LogbookContext context) : ILogEventReposi
     /// <inheritdoc/>
     public async Task<long> DeleteByApplication(Guid applicationId, CancellationToken cancellationToken = default)
     {
+        return await DeleteInBatchesAsync(context.LogEvents.Where(logEvent => logEvent.ApplicationId == applicationId), cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task<long> DeleteOlderThan(Guid applicationId, DateTime before, CancellationToken cancellationToken = default)
+    {
+        return await DeleteInBatchesAsync(
+            context.LogEvents.Where(logEvent => logEvent.ApplicationId == applicationId && logEvent.Timestamp < before),
+            cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task<DateOnly?> DropOldestPartitionBefore(DateOnly day, CancellationToken cancellationToken = default)
+    {
+        var dropped = await context.Database
+            .SqlQuery<DateOnly?>($"""SELECT telemetry.drop_oldest_log_event_partition_before({day}) AS "Value" """)
+            .ToListAsync(cancellationToken);
+
+        return dropped[0];
+    }
+
+    private static async Task<long> DeleteInBatchesAsync(IQueryable<LogEvent> logEvents, CancellationToken cancellationToken)
+    {
         var total = 0L;
         int deleted;
 
         // In small transactions: progress is kept if the request ends early, and other work is not blocked for long.
         do
         {
-            deleted = await context.LogEvents
-                .Where(logEvent => logEvent.ApplicationId == applicationId)
+            deleted = await logEvents
                 .Take(DeleteBatchSize)
                 .ExecuteDeleteAsync(cancellationToken);
 

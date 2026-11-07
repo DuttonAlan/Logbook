@@ -74,6 +74,11 @@ export default defineConfig({
           { text: 'Manage Applications and API Keys', link: '/how-to/manage-applications' },
           { text: 'Connect an application', link: '/how-to/connect-application' },
           { text: 'Search and follow logs', link: '/how-to/explore-logs' },
+          { text: 'Configure sign-in', link: '/how-to/configure-sign-in' },
+          { text: 'Deploy to production', link: '/how-to/deploy-production' },
+          { text: 'Configure a reverse proxy', link: '/how-to/reverse-proxy' },
+          { text: 'Upgrade Logbook', link: '/how-to/upgrade' },
+          { text: 'Back up and restore', link: '/how-to/back-up-and-restore' },
         ],
       },
       {

@@ -312,6 +312,16 @@ public sealed class LogEventWriterTests
         {
             throw new NotSupportedException();
         }
+
+        public Task<long> DeleteOlderThan(Guid applicationId, DateTime before, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<DateOnly?> DropOldestPartitionBefore(DateOnly day, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     private sealed class RecordingLogger<T> : ILogger<T>

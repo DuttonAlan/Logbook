@@ -47,6 +47,18 @@ public sealed class RateLimitReporter(TimeProvider timeProvider, ILogger<RateLim
         }
     }
 
+    /// <summary>
+    ///     Reports a sign-in that was rejected, because its IP address failed too many times.
+    /// </summary>
+    /// <param name="ipAddress">The IP address of the client.</param>
+    public void TooManyInvalidSignIns(string ipAddress)
+    {
+        if (IsDue($"sign-in:{ipAddress}"))
+        {
+            logger.TooManyInvalidSignIns(ipAddress);
+        }
+    }
+
     private bool IsDue(string key)
     {
         var now = timeProvider.GetUtcNow();

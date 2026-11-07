@@ -20,9 +20,9 @@ namespace Logbook.Api.OpenApi;
 public sealed class AuthorizeOperationFilter : IOperationFilter
 {
     /// <summary>
-    ///     Name of the security scheme for the admin key in the OpenAPI document.
+    ///     Name of the security scheme for the session in the OpenAPI document.
     /// </summary>
-    public const string SecuritySchemeName = "Bearer";
+    public const string SecuritySchemeName = "Session";
 
     /// <summary>
     ///     Name of the security scheme for the API Key of an Application in the OpenAPI document.
@@ -45,7 +45,7 @@ public sealed class AuthorizeOperationFilter : IOperationFilter
 
         var (schemeName, description) = authorize.Policy == AuthorizationPolicies.ApplicationApiKey
             ? (ApiKeySecuritySchemeName, "The API Key is missing, unknown, revoked or expired.")
-            : (SecuritySchemeName, "The admin key is missing or not valid.");
+            : (SecuritySchemeName, "There is no valid session, because nobody signed in or it has expired.");
 
         operation.Responses ??= [];
         operation.Responses.TryAdd(

@@ -5,15 +5,17 @@ set -euo pipefail
 
 export COMPOSE_PROJECT_NAME=logbook-smoke-test
 export POSTGRES_PASSWORD="$(openssl rand -hex 16)"
-export LOGBOOK_ADMIN_KEY="$(openssl rand -hex 32)"
+export LOGBOOK_ADMIN_PASSWORD="$(openssl rand -hex 32)"
 
 url=http://localhost:5080
+cookies="$(mktemp)"
 
 cleanup() {
   status=$?
   if [ "$status" -ne 0 ]; then
     docker compose logs --no-color --tail 50 || true
   fi
+  rm -f "$cookies"
   docker compose down --volumes --timeout 40
   exit "$status"
 }
@@ -29,8 +31,17 @@ for _ in $(seq 1 60); do
 done
 curl --silent --fail "$url/health" | jq --exit-status '.status == "Healthy"'
 
-application="$(curl --silent --fail -X POST "$url/api/v1/applications" \
-  -H "Authorization: Bearer $LOGBOOK_ADMIN_KEY" \
+# Everything but the health check needs a session.
+test "$(curl --silent --output /dev/null --write-out '%{http_code}' "$url/api/v1/applications")" = 401
+
+curl --silent --fail --cookie-jar "$cookies" -X POST "$url/api/v1/auth/sign-in" \
+  -H 'Content-Type: application/json' \
+  -d "{\"userName\":\"admin\",\"password\":\"$LOGBOOK_ADMIN_PASSWORD\"}"
+
+curl --silent --fail --cookie "$cookies" "$url/health/details" | jq --exit-status '.status == "Healthy"'
+
+application="$(curl --silent --fail --cookie "$cookies" -X POST "$url/api/v1/applications" \
+  -H 'X-Requested-With: curl' \
   -H 'Content-Type: application/json' \
   -d '{"name":"Smoke Test"}')"
 application_id="$(jq --raw-output '.id' <<<"$application")"
@@ -43,8 +54,7 @@ curl --silent --fail -X POST "$url/api/v1/logs" \
   | jq --exit-status '.accepted == 1'
 
 search() {
-  curl --silent --fail -G "$url/api/v1/logs" \
-    -H "Authorization: Bearer $LOGBOOK_ADMIN_KEY" \
+  curl --silent --fail --cookie "$cookies" -G "$url/api/v1/logs" \
     --data-urlencode "applicationId=$application_id" \
     --data-urlencode 'text=purpose'
 }
@@ -59,10 +69,25 @@ done
 search | jq --exit-status '.items[0].message == "Smoke test failed on purpose"'
 
 # Deleting the Application also deletes its Log Events.
-curl --silent --fail -X DELETE "$url/api/v1/applications/$application_id" -H "Authorization: Bearer $LOGBOOK_ADMIN_KEY"
+curl --silent --fail --cookie "$cookies" -X DELETE "$url/api/v1/applications/$application_id" -H 'X-Requested-With: curl'
 search | jq --exit-status '.items | length == 0'
 
-# The web interface is served by the same container.
-curl --silent --fail --output /dev/null "$url/"
+# The web interface is served by the same container, with the security headers.
+curl --silent --fail --dump-header - --output /dev/null "$url/" | grep --ignore-case --quiet '^content-security-policy:'
+
+# Insecure settings must end the process, not just log a message, so that an orchestrator notices.
+refused="$(docker run --detach \
+  -e 'ConnectionStrings__Database=Host=db;Database=logbook;Username=logbook;Password=unused' \
+  -e "SignIn__Administrator__Password=$LOGBOOK_ADMIN_PASSWORD" \
+  -e 'AllowedHosts=*' \
+  logbook:local)"
+for _ in $(seq 1 15); do
+  if [ "$(docker inspect --format '{{.State.Running}}' "$refused")" = false ]; then
+    break
+  fi
+  sleep 1
+done
+test "$(docker inspect --format '{{.State.Running}} {{.State.ExitCode}}' "$refused")" = 'false 1'
+docker rm --force "$refused" >/dev/null
 
 echo 'The Compose stack works.'

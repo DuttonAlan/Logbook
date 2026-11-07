@@ -1,6 +1,6 @@
 # Roadmap
 
-Logbook is built in milestones. Each one ends with something usable; **version 1.0 is M0 to M4**. Planned work is broken down further in GitHub issues; this page shows the big picture.
+Logbook is built in milestones. Each one ends with something usable. **Nothing is published before all of them are done: version 1.0 is M0 to M8.** Planned work is broken down further in GitHub issues; this page shows the big picture.
 
 ## Vision
 
@@ -66,7 +66,7 @@ Every Log Event belongs to an **Application**, which the server takes from the A
 
 - [x] Entities `Application` and `ApiKey` (only the SHA-256 hash is stored), schema `config`
 - [x] Entity `LogEvent` in schema `telemetry`, partitioned by day; `properties` and `exception` as `jsonb` with a GIN index; full-text search on `message`
-- [x] Use cases and admin API to create, list, rename and delete Applications, and to issue and revoke API Keys, protected by a single configured admin key until sign-in exists (M4)
+- [x] Use cases and admin API to create, list, rename and delete Applications, and to issue and revoke API Keys, protected by a single configured admin key at first, replaced by sign-in in M4
 - [x] `POST /api/v1/logs`: batched JSON, gzip support, size limits per request and per event
 - [x] API Key authentication with the header `X-Logbook-Key`
 - [x] Ingestion queue with batched writes (`COPY` or multi-row inserts) in a background service
@@ -96,14 +96,13 @@ Every Log Event belongs to an **Application**, which the server takes from the A
 - [x] "All Log Events of this trace"
 - [x] Manage Applications and API Keys
 
-## M4: Security and operations → 1.0
+## M4: Security and operations ✅
 
-- [ ] Sign-in to the web interface and admin API, replacing the admin key: a local administrator first, OpenID Connect (e.g. Authora) next
-- [ ] `/health/details` for authorized monitoring
-- [ ] Security headers, forwarded headers for reverse proxies, refusal to start with insecure production settings
-- [ ] Retention per Application: a background service drops expired partitions
-- [ ] How-to guides: deploy to production, configure a reverse proxy, upgrade, back up and restore
-- [ ] Release 1.0: images on GHCR, SDK packages published to NuGet from the release workflow
+- [x] Sign-in to the web interface and admin API, replacing the admin key: a local administrator first, OpenID Connect (e.g. Authora) next
+- [x] `/health/details` for authorized monitoring
+- [x] Security headers, forwarded headers for reverse proxies, refusal to start with insecure production settings
+- [x] Retention per Application: a background service drops expired partitions
+- [x] How-to guides: deploy to production, configure a reverse proxy, upgrade, back up and restore
 
 ## M5: Application Insights-style telemetry
 
@@ -130,3 +129,9 @@ Every Log Event belongs to an **Application**, which the server takes from the A
 - [ ] Serilog sink and NLog target
 - [ ] Query language, e.g. `level = Error and OrderId = 42`
 - [ ] SDKs for JavaScript and Python
+
+## Release 1.0
+
+Only after M0 to M8 are finished:
+
+- [ ] Images on GHCR, SDK packages published to NuGet from the release workflow

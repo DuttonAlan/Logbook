@@ -48,7 +48,7 @@ Server: three projects with a strict dependency direction: `Logbook.Api` → `Lo
   - `Domain/` – rich entities created through static `Create(...)` factories and changed through methods. Invalid input throws `DomainValidationException`. Timestamps are UTC.
   - `Application/<Area>/<UseCase>/` – one service class per use case with a single `ExecuteAsync`, plus its `*Request`/`*Response` records. Each new service must be registered in `Core/ServiceCollectionExtensions.cs`.
   - `Abstractions/` – repository interfaces (`I*Repository`) and other ports implemented in Infrastructure.
-- **Logbook.Infrastructure** – `LogbookContext` with `IEntityTypeConfiguration`s in `Persistence/Configurations`, repositories, migrations, health checks and background services. Two PostgreSQL schemas (`Persistence/Schemas.cs`): `config` (Applications, API Keys, settings) and `telemetry` (log events, partitioned by day so retention drops partitions).
+- **Logbook.Infrastructure** – `LogbookContext` with `IEntityTypeConfiguration`s in `Persistence/Configurations`, repositories, migrations, health checks and background services. Two PostgreSQL schemas (`Persistence/Schemas.cs`): `config` (Applications, API Keys, keys of the sessions) and `telemetry` (log events, partitioned by day so retention drops partitions).
 - **Logbook.Api** – thin controllers that call Core services, `ProblemDetailsExceptionHandler`, health endpoints and `Program.cs` for wiring. It serves the built web interface from `wwwroot` (only in the container image) with a fallback to `index.html`; unknown `/api/*` routes return 404.
 
 Web interface: `src/Logbook.Web`, React + TypeScript with Vite, TanStack Router, Query and Virtual, and plain CSS (`src/index.css`). Code by feature in `src/features/<area>/`, API calls in `src/api/`. The filters of the log explorer live in the URL. Content of Log Events is untrusted: render it as text only. Not part of the .NET solution. The Dockerfile builds it and copies `dist/` into the Api's `wwwroot`.
@@ -66,6 +66,7 @@ Services throw `NotFoundException` (404), `ConflictException` (409), `DomainVali
 - Logging uses source-generated `[LoggerMessage]` extensions in per-area `*Log.cs` classes with unique EventIds per area. Never log API Keys, only their Ids, and never write received log events into Logbook's own logs.
 - Options classes are bound in `Program.cs` with `ValidateOnStart()` and validated by `IValidateOptions<T>` validators registered via `TryAddEnumerable`.
 - API Keys are stored only as SHA-256 hashes; use `TimeProvider` for the current time.
+- The admin API requires a session (`AuthorizationPolicies.AdminApi`): a cookie from signing in, plus the header `X-Requested-With` on requests that change something. The tests get one from `factory.CreateAdminClient()`.
 - Package versions live in each `.csproj` (no central package management), like in Authora.
 
 ### Tests
@@ -80,7 +81,7 @@ Services throw `NotFoundException` (404), `ConflictException` (409), `DomainVali
 The documentation follows Diátaxis (`docs/README.md` is the index). Keep it in sync with the code: a change to endpoints, settings or flows updates the matching reference page and any affected guide.
 
 - `docs/tutorials/` – learning by doing (Docker Compose quickstart).
-- `docs/how-to/` – task guides (run from source, manage Applications, connect an application, search and follow logs; later: production deployment, reverse proxy).
+- `docs/how-to/` – task guides (run from source, manage Applications, connect an application, search and follow logs, configure sign-in, production deployment, reverse proxy, upgrade, back up and restore).
 - `docs/reference/` – exact facts: `configuration.md` (every setting, default and limit), `log-api.md`, `admin-api.md`, `health-checks.md`, `sdk-behavior.md`.
 - `docs/explanation/` – design and reasoning: architecture.
 - `docs/roadmap.md` – the milestones M0–M8 with their features. Tick off items as they are built.
