@@ -35,7 +35,8 @@ app.MapGet("/call", async (HttpContext context, IHttpClientFactory clients, ILog
 {
     using var client = clients.CreateClient();
 
-    using var response = await client.GetAsync(new Uri($"{context.Request.Scheme}://{context.Request.Host}/"), context.RequestAborted);
+    // Not the Host header of the request, which lets whoever sends it choose where this call goes.
+    using var response = await client.GetAsync(new Uri($"{context.Request.Scheme}://localhost:{context.Connection.LocalPort}/"), context.RequestAborted);
 
     logger.LogInformation("The call answered with {StatusCode}", (int)response.StatusCode);
 

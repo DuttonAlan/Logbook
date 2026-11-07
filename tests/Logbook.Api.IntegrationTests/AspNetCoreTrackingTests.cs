@@ -117,6 +117,28 @@ public sealed class AspNetCoreTrackingTests(LogbookApiFactory factory) : IClassF
     }
 
     [Fact]
+    public async Task AnExcludedPath_WithoutASlash_IsExcluded_AndABlankOne_ExcludesNothing()
+    {
+        var application = await CreateApplicationAsync();
+
+        await using var host = await StartApplicationAsync(
+            application,
+            options =>
+            {
+                options.ExcludedRequestPaths.Add("orders");
+                options.ExcludedRequestPaths.Add(string.Empty);
+                options.ExcludedRequestPaths.Add("  ");
+            });
+
+        using var excluded = await host.GetAsync(new Uri("/orders/42", UriKind.Relative), Token);
+        using var tracked = await host.GetAsync(new Uri("/ok", UriKind.Relative), Token);
+
+        var span = Assert.Single(await WaitForSpansAsync(application, 1, "kind=Request"));
+
+        Assert.Equal("GET /ok", span.GetProperty("name").GetString());
+    }
+
+    [Fact]
     public async Task AnHttpClientCall_IsADependencyOfTheRequest_InTheSameTrace_AndCarriesTheTraceOn()
     {
         var application = await CreateApplicationAsync();

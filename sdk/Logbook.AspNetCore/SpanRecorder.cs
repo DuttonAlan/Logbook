@@ -30,7 +30,14 @@ internal sealed class SpanRecorder(
     // own, and it is not a failure of the application.
     private const int ClientClosedRequest = 499;
 
-    private readonly PathString[] _excludedPaths = [.. options.ExcludedRequestPaths.Select(path => new PathString(path))];
+    // A PathString throws without the leading slash, and an empty one would match every request.
+    private readonly PathString[] _excludedPaths =
+    [
+        .. options.ExcludedRequestPaths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => path.Trim())
+            .Select(path => new PathString(path.StartsWith('/') ? path : "/" + path))
+    ];
 
     /// <summary>
     ///     What to track.

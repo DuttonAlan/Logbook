@@ -144,6 +144,7 @@ public sealed class LogEventRepository(LogbookContext context) : ILogEventReposi
                 CROSS JOIN LATERAL (
                     SELECT e."Exception"::text AS "Exception" FROM telemetry.log_events e
                     WHERE e."ExceptionFingerprint" = g."Fingerprint" AND e."ApplicationId" = g."ApplicationId" AND e."Timestamp" = g."LastOccurrence"
+                        AND ({environment}::text IS NULL OR e."Environment" = {environment})
                     LIMIT 1) latest
                 """)
             .ToListAsync(cancellationToken);

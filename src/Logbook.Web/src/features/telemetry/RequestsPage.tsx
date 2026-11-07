@@ -57,7 +57,8 @@ export function RequestsPage() {
   )
 
   const results = useInfiniteQuery({
-    queryKey: ['spans', query],
+    // With the time as well: for All time, the query itself stays the same, and Refresh would do nothing.
+    queryKey: ['spans', query, now],
     queryFn: ({ pageParam, signal }) => searchSpans(query, pageParam, signal),
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.nextCursor,

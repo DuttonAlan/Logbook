@@ -111,4 +111,4 @@ With `builder.Services.AddLogbookTelemetry(…)` from `Logbook.AspNetCore`, thes
 | `TrackSqlDependencies` | `false` | Track the commands the application sends to a database, with a driver that publishes an `ActivitySource`. |
 | `CaptureSqlText` | `false` | Send the text of SQL statements, which can contain values if a statement is not parameterized. |
 | `SqlActivitySources` | – | Names of further `ActivitySource`s of database drivers. `Npgsql` and `MySqlConnector` are always included. |
-| `ExcludedRequestPaths` | – | Paths of requests not to track, each including what is below it, e.g. `/health`. |
+| `ExcludedRequestPaths` | – | Paths of requests not to track, each including what is below it, e.g. `/health`. A missing leading `/` is added, and blank entries are ignored. |

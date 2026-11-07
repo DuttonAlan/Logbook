@@ -68,7 +68,8 @@ export function ExceptionsPage() {
   )
 
   const results = useQuery({
-    queryKey: ['exception-groups', query],
+    // With the time as well: for All time, the query itself stays the same, and Refresh would do nothing.
+    queryKey: ['exception-groups', query, now],
     queryFn: ({ signal }) => getExceptionGroups(query, signal),
     placeholderData: keepPreviousData,
     // It would copy exact numbers into plain objects when it merges a refetch.

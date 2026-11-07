@@ -57,29 +57,38 @@ export function buildTimeline(spans: Span[], logEvents: LogEvent[]): Timeline {
 
   const rows: TimelineRow[] = []
   const visited = new Set<string>()
+  const expanded = new Set<string>()
+
+  function addSpan(span: Span, depth: number) {
+    // The data comes from senders, so parents could form a cycle.
+    if (visited.has(span.id)) {
+      return
+    }
+
+    visited.add(span.id)
+
+    rows.push({
+      kind: 'span',
+      id: span.id,
+      depth,
+      offset: toOffset(toTime(span.timestamp)),
+      width: durationMs > 0 ? span.durationMs / durationMs : 1,
+      span,
+    })
+
+    // Under the first span with this Id only, or what belongs to it would be shown once for each of them.
+    if (!expanded.has(span.spanId)) {
+      expanded.add(span.spanId)
+      visit(span.spanId, depth + 1)
+    }
+  }
 
   function visit(parent: string | null, depth: number) {
     const items = [...(children.get(parent) ?? [])].sort((a, b) => toTime(a.timestamp) - toTime(b.timestamp))
 
     for (const item of items) {
       if ('kind' in item) {
-        // The data comes from senders, so parents could form a cycle.
-        if (!visited.has(item.id)) {
-          visited.add(item.id)
-
-          const offset = toOffset(toTime(item.timestamp))
-
-          rows.push({
-            kind: 'span',
-            id: item.id,
-            depth,
-            offset,
-            width: durationMs > 0 ? item.durationMs / durationMs : 1,
-            span: item,
-          })
-
-          visit(item.spanId, depth + 1)
-        }
+        addSpan(item, depth)
       } else {
         rows.push({ kind: 'log', id: item.id, depth, offset: toOffset(toTime(item.timestamp)), event: item })
       }
@@ -88,12 +97,9 @@ export function buildTimeline(spans: Span[], logEvents: LogEvent[]): Timeline {
 
   visit(null, 0)
 
-  // Spans in a cycle have no way in from the top, and must still be shown.
+  // Spans in a cycle have no way in from the top, and must still be shown with what is below them.
   for (const span of spans) {
-    if (!visited.has(span.id)) {
-      visited.add(span.id)
-      rows.push({ kind: 'span', id: span.id, depth: 0, offset: toOffset(toTime(span.timestamp)), width: durationMs > 0 ? span.durationMs / durationMs : 1, span })
-    }
+    addSpan(span, 0)
   }
 
   return { rows, durationMs }

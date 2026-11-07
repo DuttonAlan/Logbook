@@ -292,6 +292,32 @@ public sealed class TelemetryApiTests(LogbookApiFactory factory) : IClassFixture
     }
 
     [Fact]
+    public async Task ExceptionGroups_WithAnEnvironment_ShowTheExceptionOfThatEnvironment_AtTheSameTimestamp()
+    {
+        var application = await CreateApplicationAsync();
+        var now = DateTimeOffset.UtcNow;
+
+        var failure = """{"type":"System.InvalidOperationException","message":"MESSAGE","stackTrace":"   at Shop.Orders.Place()"}""";
+
+        using var logs = await SendLogsAsync(application, $$"""
+            [
+              {"timestamp":"{{now:O}}","level":"Error","message":"Staging","environment":"Staging","exception":{{failure.Replace("MESSAGE", "From Staging", StringComparison.Ordinal)}}},
+              {"timestamp":"{{now:O}}","level":"Error","message":"Production","environment":"Production","exception":{{failure.Replace("MESSAGE", "From Production", StringComparison.Ordinal)}}}
+            ]
+            """);
+        logs.EnsureSuccessStatusCode();
+
+        await WaitForGroupsAsync($"applicationId={application.Id}&environment=Production", 1);
+        await WaitForGroupsAsync($"applicationId={application.Id}&environment=Staging", 1);
+
+        var production = Assert.Single(await GetGroupsAsync($"applicationId={application.Id}&environment=Production"));
+        var staging = Assert.Single(await GetGroupsAsync($"applicationId={application.Id}&environment=Staging"));
+
+        Assert.Equal("From Production", production.GetProperty("exception").GetProperty("message").GetString());
+        Assert.Equal("From Staging", staging.GetProperty("exception").GetProperty("message").GetString());
+    }
+
+    [Fact]
     public async Task ExceptionGroups_WithAnInvalidSort_IsRejected()
     {
         using var response = await _admin.GetAsync(new Uri("/api/v1/exceptions?sort=Other", UriKind.Relative), Token);
