@@ -60,13 +60,15 @@ public sealed class LogbookMetric : ITelemetryItem
         IEnumerable<KeyValuePair<string, string?>>? dimensions = null)
     {
         Timestamp = timestamp;
-        Name = string.IsNullOrWhiteSpace(name) ? UnnamedName : LogEventGuard.Cut(name!.Trim(), NameMaxLength);
+        Name = NormalizeName(name) ?? UnnamedName;
         Count = count < 1 ? 1 : count;
         Sum = Finite(sum);
         Min = Math.Min(Finite(min), Finite(max));
         Max = Math.Max(Finite(min), Finite(max));
         Environment = string.IsNullOrWhiteSpace(environment) ? null : LogEventGuard.Cut(environment!, EnvironmentMaxLength);
-        Dimensions = CutDimensions(dimensions);
+
+        var normalized = NormalizeDimensions(dimensions);
+        Dimensions = normalized.Count == 0 ? NoDimensions : normalized.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -124,36 +126,53 @@ public sealed class LogbookMetric : ITelemetryItem
 
     private static double Finite(double value) => double.IsFinite(value) ? value : 0;
 
-    private static IReadOnlyDictionary<string, string> CutDimensions(IEnumerable<KeyValuePair<string, string?>>? dimensions)
+    /// <summary>
+    ///     Makes a metric name acceptable to the server: trimmed, cut at its limit, without U+0000.
+    /// </summary>
+    /// <param name="name">The name.</param>
+    /// <returns>The name, or null if it is empty.</returns>
+    internal static string? NormalizeName(string? name)
     {
-        if (dimensions is null)
-        {
-            return NoDimensions;
-        }
+        return string.IsNullOrWhiteSpace(name) ? null : Clean(name!, NameMaxLength);
+    }
 
-        // The server trims the names and rejects two that are the same, so they are compared as it would.
+    /// <summary>
+    ///     Makes dimensions acceptable to the server, as it compares them: names and values trimmed, cut at their limits and
+    ///     without U+0000, entries without a name or value left out, the first of the same name kept, ordered by name, and at
+    ///     most <see cref="MaxDimensions"/>.
+    /// </summary>
+    /// <remarks>
+    ///     The server replaces U+0000 before it checks that the names are unique. Doing the same here keeps a single metric
+    ///     point with two such names from costing its whole batch.
+    /// </remarks>
+    /// <param name="dimensions">The dimensions.</param>
+    /// <returns>The dimensions to send, ordered by name.</returns>
+    internal static List<KeyValuePair<string, string>> NormalizeDimensions(IEnumerable<KeyValuePair<string, string?>>? dimensions)
+    {
         var sorted = new SortedDictionary<string, string>(StringComparer.Ordinal);
 
-        foreach (var dimension in dimensions)
+        foreach (var dimension in dimensions ?? [])
         {
             if (string.IsNullOrWhiteSpace(dimension.Key) || string.IsNullOrWhiteSpace(dimension.Value))
             {
                 continue;
             }
 
-            var key = LogEventGuard.Cut(dimension.Key.Trim(), DimensionNameMaxLength);
+            var key = Clean(dimension.Key, DimensionNameMaxLength);
 
             if (!sorted.ContainsKey(key))
             {
-                sorted[key] = LogEventGuard.Cut(dimension.Value!.Trim(), DimensionValueMaxLength);
+                sorted[key] = Clean(dimension.Value!, DimensionValueMaxLength);
             }
         }
 
-        if (sorted.Count == 0)
-        {
-            return NoDimensions;
-        }
+        return [.. sorted.Take(MaxDimensions)];
+    }
 
-        return sorted.Take(MaxDimensions).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+    // The same as the server, which trims and then replaces U+0000 one for one. Trimmed again after cutting, as the server
+    // would trim a space the cut leaves at the end, and two names could then become the same.
+    private static string Clean(string value, int maxLength)
+    {
+        return LogEventGuard.Cut(value.Trim(), maxLength).TrimEnd().Replace('\0', '�');
     }
 }

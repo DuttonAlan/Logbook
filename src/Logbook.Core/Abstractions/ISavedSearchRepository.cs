@@ -31,13 +31,6 @@ public interface ISavedSearchRepository
     public Task<SavedSearch?> GetById(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Counts the saved searches.
-    /// </summary>
-    /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
-    /// <returns>The number of saved searches.</returns>
-    public Task<int> Count(CancellationToken cancellationToken = default);
-
-    /// <summary>
     ///     Checks whether another saved search already has the given Name.
     /// </summary>
     /// <param name="name">The Name, compared character by character.</param>
@@ -47,12 +40,14 @@ public interface ISavedSearchRepository
     public Task<bool> NameExists(string name, Guid? excludedId = null, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Stores a new saved search.
+    ///     Stores a new saved search, unless there are already as many as allowed. Counting and storing are one step, so
+    ///     that requests at the same time cannot together go over the limit.
     /// </summary>
     /// <param name="savedSearch">The saved search.</param>
+    /// <param name="maxCount">The most saved searches there may be.</param>
     /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
-    /// <returns>A Task that completes once the saved search is stored.</returns>
-    public Task Add(SavedSearch savedSearch, CancellationToken cancellationToken = default);
+    /// <returns><see langword="true"/> if it was stored, or <see langword="false"/> if the limit is reached.</returns>
+    public Task<bool> TryAdd(SavedSearch savedSearch, int maxCount, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Deletes a saved search.

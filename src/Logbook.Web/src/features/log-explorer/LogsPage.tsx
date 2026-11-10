@@ -188,7 +188,7 @@ export function LogsPage() {
         <button type="button" className={`button ${isLive ? 'primary' : ''}`} aria-pressed={isLive} onClick={() => onChange({ live: isLive ? undefined : true })}>
           Live tail
         </button>
-        <SavedSearches />
+        <SavedSearches onOpen={() => setNow(Date.now())} />
       </FilterBar>
 
       {isLive && (

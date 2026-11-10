@@ -30,7 +30,7 @@ public sealed class GetMetricNamesService(IMetricRepository metricRepository, Ti
     /// <param name="environment">Only points of this Environment, compared exactly.</param>
     /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
     /// <returns>The names, ordered by name.</returns>
-    /// <exception cref="DomainValidationException">Thrown when the time range is empty or too long.</exception>
+    /// <exception cref="DomainValidationException">Thrown when the time range is empty, too long, or too close to the smallest or largest date.</exception>
     public async Task<GetMetricNamesResponse> ExecuteAsync(
         DateTimeOffset? from,
         DateTimeOffset? to,
@@ -38,18 +38,7 @@ public sealed class GetMetricNamesService(IMetricRepository metricRepository, Ti
         string? environment,
         CancellationToken cancellationToken = default)
     {
-        var end = to?.UtcDateTime ?? timeProvider.GetUtcNow().UtcDateTime;
-        var start = from?.UtcDateTime ?? end.AddDays(-7);
-
-        if (start >= end)
-        {
-            throw new DomainValidationException("'from' must be earlier than 'to'.", nameof(from));
-        }
-
-        if (end - start > ChartRange.MaxLength)
-        {
-            throw new DomainValidationException($"The time range must not be longer than {ChartRange.MaxLength.TotalDays} days.", nameof(from));
-        }
+        var (start, end) = ChartRange.ResolveRange(from, to, timeProvider.GetUtcNow().UtcDateTime, TimeSpan.FromDays(7));
 
         var names = await metricRepository.GetNames(start, end, applicationId, NormalizeText(environment), MaxNames, cancellationToken);
 

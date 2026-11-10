@@ -46,12 +46,10 @@ public sealed class CreateSavedSearchService(
             throw new ConflictException($"A saved search named '{savedSearch.Name}' already exists.");
         }
 
-        if (await savedSearchRepository.Count(cancellationToken) >= MaxSavedSearches)
+        if (!await savedSearchRepository.TryAdd(savedSearch, MaxSavedSearches, cancellationToken))
         {
             throw new ConflictException($"Logbook keeps at most {MaxSavedSearches} saved searches. Delete one first.");
         }
-
-        await savedSearchRepository.Add(savedSearch, cancellationToken);
 
         logger.SavedSearchCreated(savedSearch.Id);
 

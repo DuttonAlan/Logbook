@@ -21,7 +21,8 @@ namespace Logbook.Sdk;
 ///     The volume sent does not depend on how often the application measures, but on how many different metrics and
 ///     dimensions it uses: at most <see cref="MaxSeriesPerInterval"/> per interval are kept, and measurements beyond that are
 ///     dropped and reported through the <c>EventSource</c> named <c>Logbook-Sdk</c>. Dispose it before the client, which
-///     dependency injection does, so that the last interval is sent too.
+///     dependency injection does, so that the last interval is sent too. Disposing waits for at most
+///     <see cref="LogbookOptions.ShutdownTimeout"/>.
 /// </remarks>
 public sealed class LogbookMetrics : IDisposable
 {
@@ -30,12 +31,10 @@ public sealed class LogbookMetrics : IDisposable
     /// </summary>
     public const int MaxSeriesPerInterval = 1000;
 
-    private const char DimensionSeparator = '\u001f';
-    private const char ValueSeparator = '\u001e';
-
     private readonly LogbookClient? _client;
     private readonly string? _environment;
     private readonly TimeProvider _timeProvider;
+    private readonly TimeSpan _shutdownTimeout;
     private readonly ITimer? _timer;
     private readonly MeterListener? _listener;
     private readonly string[] _meters = [];
@@ -48,7 +47,7 @@ public sealed class LogbookMetrics : IDisposable
     ///     Creates the metrics and starts sending them at every <see cref="LogbookOptions.MetricInterval"/>.
     /// </summary>
     /// <param name="client">The client to send with. If it is disabled, nothing is recorded.</param>
-    /// <param name="options">The options, of which the interval and the meters are used.</param>
+    /// <param name="options">The options, of which the interval, the meters and the shutdown timeout are used.</param>
     /// <param name="environment">The Environment of the metric points, e.g. <c>Production</c>.</param>
     public LogbookMetrics(LogbookClient client, LogbookOptions options, string? environment = null)
         : this(client, options, environment, TimeProvider.System)
@@ -75,6 +74,8 @@ public sealed class LogbookMetrics : IDisposable
 
         try
         {
+            _shutdownTimeout = options.ShutdownTimeout;
+
             // Otherwise the timer would keep the Activity, scopes and other ambient state of whoever created this.
             using (ExecutionContext.SuppressFlow())
             {
@@ -109,21 +110,18 @@ public sealed class LogbookMetrics : IDisposable
     /// <param name="dimensions">The dimensions, e.g. <c>("Region", "EU")</c>. A dimension without a value is left out.</param>
     public void Record(string name, double value, params ReadOnlySpan<(string Name, string? Value)> dimensions)
     {
-        if (_client is null || string.IsNullOrWhiteSpace(name) || !double.IsFinite(value) || Volatile.Read(ref _disposed) != 0)
+        if (_client is null || !double.IsFinite(value) || Volatile.Read(ref _disposed) != 0)
         {
             return;
         }
 
         try
         {
-            var pairs = new List<KeyValuePair<string, string>>(dimensions.Length);
+            var pairs = new KeyValuePair<string, string?>[dimensions.Length];
 
-            foreach (var (dimensionName, dimensionValue) in dimensions)
+            for (var index = 0; index < dimensions.Length; index++)
             {
-                if (!string.IsNullOrWhiteSpace(dimensionName) && !string.IsNullOrWhiteSpace(dimensionValue))
-                {
-                    pairs.Add(new KeyValuePair<string, string>(dimensionName, dimensionValue));
-                }
+                pairs[index] = new KeyValuePair<string, string?>(dimensions[index].Name, dimensions[index].Value);
             }
 
             RecordCore(name, value, pairs);
@@ -137,7 +135,9 @@ public sealed class LogbookMetrics : IDisposable
     }
 
     /// <summary>
-    ///     Stops recording, and hands the measurements of the current interval to the client.
+    ///     Stops recording, and hands the measurements of the current interval to the client. Waits for at most
+    ///     <see cref="LogbookOptions.ShutdownTimeout"/> for a flush that is under way, e.g. one held up by an observable
+    ///     instrument of the application, and gives up the last interval after that.
     /// </summary>
     public void Dispose()
     {
@@ -151,7 +151,21 @@ public sealed class LogbookMetrics : IDisposable
             _timer?.Dispose();
             _listener?.Dispose();
 
-            Flush();
+            if (_client is null || !_flushLock.TryEnter(_shutdownTimeout))
+            {
+                return;
+            }
+
+            try
+            {
+                // Without the observable instruments: the listener is gone, and their callbacks are code of the application
+                // that could take any time.
+                FlushCore(readObservables: false);
+            }
+            finally
+            {
+                _flushLock.Exit();
+            }
         }
 #pragma warning disable CA1031 // The SDK must never throw into the host application.
         catch (Exception)
@@ -162,7 +176,7 @@ public sealed class LogbookMetrics : IDisposable
     }
 
     /// <summary>
-    ///     Ends the current interval and hands its metric points to the client. Called by the timer and when disposing.
+    ///     Ends the current interval and hands its metric points to the client. Called by the timer.
     /// </summary>
     internal void Flush()
     {
@@ -171,8 +185,45 @@ public sealed class LogbookMetrics : IDisposable
             return;
         }
 
-        // The timer can fire again while a slow flush still runs, and disposing can come at the same time.
-        lock (_flushLock)
+        try
+        {
+            // The timer can fire again while a slow flush still runs.
+            lock (_flushLock)
+            {
+                FlushCore(readObservables: true);
+            }
+        }
+#pragma warning disable CA1031 // The timer must not end the process.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+        }
+    }
+
+    /// <summary>
+    ///     Builds a key that two different series can never share: each part is written with its length in front, so no
+    ///     character inside a name or value can be mistaken for the boundary between two of them.
+    /// </summary>
+    private static string BuildKey(string name, List<KeyValuePair<string, string>> dimensions)
+    {
+        var key = new StringBuilder();
+
+        Append(key, name);
+
+        foreach (var dimension in dimensions)
+        {
+            Append(key, dimension.Key);
+            Append(key, dimension.Value);
+        }
+
+        return key.ToString();
+
+        static void Append(StringBuilder key, string part) => key.Append(part.Length).Append(':').Append(part);
+    }
+
+    private void FlushCore(bool readObservables)
+    {
+        if (readObservables)
         {
             try
             {
@@ -184,56 +235,41 @@ public sealed class LogbookMetrics : IDisposable
 #pragma warning restore CA1031
             {
             }
+        }
 
-            var ended = Interlocked.Exchange(ref _current, new Interval(_timeProvider.GetUtcNow()));
+        var ended = Interlocked.Exchange(ref _current, new Interval(_timeProvider.GetUtcNow()));
 
-            // A measurement that started before the exchange finishes in the ended interval. Any later one sees the new
-            // interval, so after this wait nothing changes the ended one anymore.
-            var wait = default(SpinWait);
+        // A measurement that started before the exchange finishes in the ended interval. Any later one sees the new
+        // interval, so after this wait nothing changes the ended one anymore.
+        var wait = default(SpinWait);
 
-            while (Volatile.Read(ref ended.Writers) != 0)
-            {
-                wait.SpinOnce();
-            }
+        while (Volatile.Read(ref ended.Writers) != 0)
+        {
+            wait.SpinOnce();
+        }
 
-            foreach (var series in ended.Series.Values)
-            {
-                _client.Enqueue(new LogbookMetric(ended.Start, series.Name, series.Count, series.Sum, series.Min, series.Max, _environment, series.Dimensions));
-            }
+        foreach (var series in ended.Series.Values)
+        {
+            _client!.Enqueue(new LogbookMetric(ended.Start, series.Name, series.Count, series.Sum, series.Min, series.Max, _environment, series.Dimensions));
+        }
 
-            if (ended.Dropped > 0)
-            {
-                LogbookEventSource.Log.EventsDropped($"more than {MaxSeriesPerInterval} combinations of metric and dimensions in one interval", ended.Dropped);
-            }
+        if (ended.Dropped > 0)
+        {
+            LogbookEventSource.Log.EventsDropped($"more than {MaxSeriesPerInterval} combinations of metric and dimensions in one interval", ended.Dropped);
         }
     }
 
-    private static string BuildKey(string name, List<KeyValuePair<string, string>> dimensions)
+    // Names and dimensions are made what the server accepts before they become a series, so that what is kept in memory
+    // is bounded, and two inputs the server would treat as the same are one series.
+    private void RecordCore(string? name, double value, IEnumerable<KeyValuePair<string, string?>> dimensions)
     {
-        if (dimensions.Count == 0)
+        if (LogbookMetric.NormalizeName(name) is not { } normalizedName)
         {
-            return name;
+            return;
         }
 
-        var key = new StringBuilder(name);
-
-        foreach (var dimension in dimensions)
-        {
-            key.Append(DimensionSeparator).Append(dimension.Key).Append(ValueSeparator).Append(dimension.Value);
-        }
-
-        return key.ToString();
-    }
-
-    private void RecordCore(string name, double value, List<KeyValuePair<string, string>> dimensions)
-    {
-        // The same dimensions in another order are the same series.
-        if (dimensions.Count > 1)
-        {
-            dimensions.Sort((left, right) => string.CompareOrdinal(left.Key, right.Key));
-        }
-
-        var key = BuildKey(name, dimensions);
+        var normalizedDimensions = LogbookMetric.NormalizeDimensions(dimensions);
+        var key = BuildKey(normalizedName, normalizedDimensions);
 
         while (true)
         {
@@ -251,13 +287,13 @@ public sealed class LogbookMetrics : IDisposable
 
                 if (!interval.Series.TryGetValue(key, out var series))
                 {
-                    if (interval.Series.Count >= MaxSeriesPerInterval)
+                    series = interval.AddSeries(key, normalizedName, normalizedDimensions);
+
+                    if (series is null)
                     {
                         Interlocked.Increment(ref interval.Dropped);
                         return;
                     }
-
-                    series = interval.Series.GetOrAdd(key, _ => new Series(name, [.. dimensions.Select(pair => new KeyValuePair<string, string?>(pair.Key, pair.Value))]));
                 }
 
                 series.Add(value);
@@ -321,16 +357,11 @@ public sealed class LogbookMetrics : IDisposable
 
         try
         {
-            var pairs = new List<KeyValuePair<string, string>>(tags.Length);
+            var pairs = new KeyValuePair<string, string?>[tags.Length];
 
-            foreach (var tag in tags)
+            for (var index = 0; index < tags.Length; index++)
             {
-                var text = Convert.ToString(tag.Value, CultureInfo.InvariantCulture);
-
-                if (!string.IsNullOrWhiteSpace(tag.Key) && !string.IsNullOrWhiteSpace(text))
-                {
-                    pairs.Add(new KeyValuePair<string, string>(tag.Key, text!));
-                }
+                pairs[index] = new KeyValuePair<string, string?>(tags[index].Key, Convert.ToString(tags[index].Value, CultureInfo.InvariantCulture));
             }
 
             RecordCore(instrument.Name, value, pairs);
@@ -349,9 +380,38 @@ public sealed class LogbookMetrics : IDisposable
 
         public int Dropped;
 
+        private int _seriesCount;
+
         public DateTimeOffset Start { get; } = start;
 
         public ConcurrentDictionary<string, Series> Series { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>
+        ///     Adds a series, if the limit allows. The slot is reserved before the series is added, so that threads adding
+        ///     different series at the same time cannot together go over the limit.
+        /// </summary>
+        /// <returns>The series, also if another thread added it first, or null if the limit is reached.</returns>
+        public Series? AddSeries(string key, string name, List<KeyValuePair<string, string>> dimensions)
+        {
+            if (Interlocked.Increment(ref _seriesCount) > MaxSeriesPerInterval)
+            {
+                Interlocked.Decrement(ref _seriesCount);
+
+                return Series.TryGetValue(key, out var existing) ? existing : null;
+            }
+
+            var created = new Series(name, [.. dimensions.Select(pair => new KeyValuePair<string, string?>(pair.Key, pair.Value))]);
+
+            if (Series.TryAdd(key, created))
+            {
+                return created;
+            }
+
+            // Another thread added the same series first, and holds its own slot for it.
+            Interlocked.Decrement(ref _seriesCount);
+
+            return Series[key];
+        }
     }
 
     private sealed class Series(string name, KeyValuePair<string, string?>[] dimensions)

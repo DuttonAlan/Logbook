@@ -76,6 +76,46 @@ public sealed class SavedSearchTests(LogbookApiFactory factory) : IClassFixture<
         Assert.Equal(HttpStatusCode.Conflict, renamed.StatusCode);
     }
 
+    [Fact]
+    public async Task CreatingAtTheSameTime_NeverGoesOverTheLimit()
+    {
+        const int Parallel = 20;
+        var limit = Logbook.Core.Application.SavedSearches.Create.CreateSavedSearchService.MaxSavedSearches;
+        var prefix = $"Limit {Guid.NewGuid():N}";
+
+        // Fills up to just below the limit, so the requests at the same time compete for the last places.
+        var existing = (await GetAllAsync()).Count;
+
+        for (var index = existing; index < limit - 5; index++)
+        {
+            using var filled = await _admin.PostAsJsonAsync(Path, new { name = $"{prefix} fill {index}", query = "q=a" }, Token);
+            filled.EnsureSuccessStatusCode();
+        }
+
+        try
+        {
+            var responses = await Task.WhenAll(Enumerable.Range(0, Parallel).Select(async index =>
+            {
+                using var client = factory.CreateAdminClient();
+                using var response = await client.PostAsJsonAsync(Path, new { name = $"{prefix} race {index}", query = "q=a" }, Token);
+
+                return response.StatusCode;
+            }));
+
+            Assert.Equal(5, responses.Count(status => status == HttpStatusCode.Created));
+            Assert.Equal(Parallel - 5, responses.Count(status => status == HttpStatusCode.Conflict));
+            Assert.Equal(limit, (await GetAllAsync()).Count);
+        }
+        finally
+        {
+            // The other tests of this class share the database, and need room for their own.
+            foreach (var savedSearch in (await GetAllAsync()).Where(item => item.Name.StartsWith(prefix, StringComparison.Ordinal)))
+            {
+                using var deleted = await _admin.DeleteAsync(new Uri($"{Path}/{savedSearch.Id}", UriKind.Relative), Token);
+            }
+        }
+    }
+
     [Theory]
     [InlineData("", "q=a")]
     [InlineData("   ", "q=a")]

@@ -108,7 +108,12 @@ function ManageDialog({ query, savedSearches, onOpen, onClose }: ManageDialogPro
   )
 }
 
-export function SavedSearches() {
+interface SavedSearchesProps {
+  // Called before a saved search is opened, so that its relative time range counts from now, as any other new search.
+  onOpen: () => void
+}
+
+export function SavedSearches({ onOpen }: SavedSearchesProps) {
   const router = useRouter()
   const searchStr = useRouterState({ select: (state) => state.location.searchStr })
   const [isManaging, setIsManaging] = useState(false)
@@ -122,6 +127,8 @@ export function SavedSearches() {
     const item = savedSearches.data?.find((savedSearch) => savedSearch.id === id)
 
     if (item) {
+      onOpen()
+
       // Through the history, so that the router reads the query string like any link to the log explorer.
       router.history.push(`/?${item.query}`)
     }

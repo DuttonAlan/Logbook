@@ -72,23 +72,52 @@ public sealed record ChartRange(DateTime From, DateTime To, TimeSpan BucketWidth
     /// <exception cref="DomainValidationException">Thrown when the range is empty or too long.</exception>
     public static ChartRange Create(DateTimeOffset? from, DateTimeOffset? to, DateTime now)
     {
-        var end = to?.UtcDateTime ?? now;
-        var start = from?.UtcDateTime ?? end.AddDays(-1);
+        var (start, end) = ResolveRange(from, to, now, TimeSpan.FromDays(1));
 
-        if (start >= end)
+        // Counted from the start of the first bucket, which can be earlier than the requested start.
+        var width = Widths.FirstOrDefault(candidate => Math.Ceiling((end - BucketOf(start, candidate)) / candidate) <= MaxBuckets, Widths[^1]);
+
+        return new ChartRange(BucketOf(start, width), end, width);
+    }
+
+    /// <summary>
+    ///     Fills in and checks a time range.
+    /// </summary>
+    /// <remarks>
+    ///     The range must keep a week away from the smallest and the largest date that can be represented, so that neither
+    ///     the default start, nor rounding down to a bucket, nor stepping through the buckets can go past them.
+    /// </remarks>
+    /// <param name="from">The start of the range, or null for <paramref name="defaultLength"/> before the end.</param>
+    /// <param name="to">The end of the range, or null for <paramref name="now"/>.</param>
+    /// <param name="now">The current point in time (UTC).</param>
+    /// <param name="defaultLength">The length of the range if it has no start.</param>
+    /// <returns>The start and end (UTC).</returns>
+    /// <exception cref="DomainValidationException">Thrown when the range is empty, too long, or too close to the smallest or largest date.</exception>
+    public static (DateTime Start, DateTime End) ResolveRange(DateTimeOffset? from, DateTimeOffset? to, DateTime now, TimeSpan defaultLength)
+    {
+        var earliest = DateTime.MinValue.AddDays(7);
+        var latest = DateTime.MaxValue.AddDays(-7);
+
+        var end = to?.UtcDateTime ?? now;
+
+        if (end > latest || (from is null && end - earliest < defaultLength) || (from is { } start && start.UtcDateTime < earliest))
+        {
+            throw new DomainValidationException($"The time range must be between {earliest:yyyy-MM-dd} and {latest:yyyy-MM-dd}.", nameof(from));
+        }
+
+        var begin = from?.UtcDateTime ?? end - defaultLength;
+
+        if (begin >= end)
         {
             throw new DomainValidationException("'from' must be earlier than 'to'.", nameof(from));
         }
 
-        if (end - start > MaxLength)
+        if (end - begin > MaxLength)
         {
             throw new DomainValidationException($"The time range must not be longer than {MaxLength.TotalDays} days.", nameof(from));
         }
 
-        var length = end - start;
-        var width = Widths.FirstOrDefault(candidate => length / candidate <= MaxBuckets, Widths[^1]);
-
-        return new ChartRange(BucketOf(start, width), end, width);
+        return (begin, end);
     }
 
     /// <summary>

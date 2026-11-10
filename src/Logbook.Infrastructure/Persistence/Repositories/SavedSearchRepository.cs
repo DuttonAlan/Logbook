@@ -30,12 +30,6 @@ public sealed class SavedSearchRepository(LogbookContext context) : ISavedSearch
     }
 
     /// <inheritdoc/>
-    public async Task<int> Count(CancellationToken cancellationToken = default)
-    {
-        return await context.SavedSearches.CountAsync(cancellationToken);
-    }
-
-    /// <inheritdoc/>
     public async Task<bool> NameExists(string name, Guid? excludedId = null, CancellationToken cancellationToken = default)
     {
         return await context.SavedSearches
@@ -43,10 +37,24 @@ public sealed class SavedSearchRepository(LogbookContext context) : ISavedSearch
     }
 
     /// <inheritdoc/>
-    public async Task Add(SavedSearch savedSearch, CancellationToken cancellationToken = default)
+    public async Task<bool> TryAdd(SavedSearch savedSearch, int maxCount, CancellationToken cancellationToken = default)
     {
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+
+        // This mode conflicts with itself but not with reading, so a second creation waits until this one has committed and
+        // then counts it, while listing the saved searches is not held up.
+        await context.Database.ExecuteSqlRawAsync("LOCK TABLE config.saved_searches IN SHARE ROW EXCLUSIVE MODE", cancellationToken);
+
+        if (await context.SavedSearches.CountAsync(cancellationToken) >= maxCount)
+        {
+            return false;
+        }
+
         context.SavedSearches.Add(savedSearch);
         await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return true;
     }
 
     /// <inheritdoc/>

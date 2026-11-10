@@ -104,6 +104,10 @@ public sealed class DashboardApiTests(LogbookApiFactory factory) : IClassFixture
     [InlineData("/api/v1/metrics/names?from=2026-11-05T00:00:00Z&to=2026-11-04T00:00:00Z")]
     [InlineData("/api/v1/overview?from=2026-11-05T00:00:00Z&to=2026-11-04T00:00:00Z")]
     [InlineData("/api/v1/overview?slowest=51")]
+    [InlineData("/api/v1/overview?to=0001-01-01T00:00:00Z")]
+    [InlineData("/api/v1/metrics?name=a&to=0001-01-01T00:00:00Z")]
+    [InlineData("/api/v1/metrics/names?to=0001-01-02T00:00:00Z")]
+    [InlineData("/api/v1/overview?to=9999-12-31T23:59:59Z")]
     public async Task Reading_WithAnInvalidParameter_IsRejected(string path)
     {
         using var response = await _admin.GetAsync(new Uri(path, UriKind.Relative), Token);

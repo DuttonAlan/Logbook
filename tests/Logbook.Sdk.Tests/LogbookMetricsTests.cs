@@ -143,6 +143,117 @@ public sealed class LogbookMetricsTests : IDisposable
     }
 
     [Fact]
+    public async Task ConcurrentNewSeries_NeverGoOverTheLimit()
+    {
+        using var metrics = new LogbookMetrics(_client, BaseOptions, null, _time);
+
+        const int Threads = 8;
+        var perThread = LogbookMetrics.MaxSeriesPerInterval / 2;
+        using var start = new Barrier(Threads);
+
+        await Task.WhenAll(Enumerable.Range(0, Threads).Select(thread => Task.Run(() =>
+        {
+            start.SignalAndWait(TestContext.Current.CancellationToken);
+
+            for (var index = 0; index < perThread; index++)
+            {
+                metrics.Record("users", 1, ("Key", $"{thread}-{index}"));
+            }
+        })));
+
+        metrics.Flush();
+
+        Assert.Equal(LogbookMetrics.MaxSeriesPerInterval, Points().Count);
+    }
+
+    [Fact]
+    public void DimensionsThatOnlyLookAlike_AreDifferentSeries_AndOnesTheServerTreatsAsTheSame_AreOne()
+    {
+        using var metrics = new LogbookMetrics(_client, BaseOptions, null, _time);
+
+        // Characters that could separate the parts of a key are text like any other.
+        metrics.Record("m", 1, ("a", "b\u001fc\u001ed"));
+        metrics.Record("m", 1, ("a", "b"), ("c", "d"));
+
+        // The server trims, and replaces U+0000, before it compares names.
+        metrics.Record("n", 1, (" Region ", "EU"), ("Region", "US"));
+        metrics.Record("n", 1, ("Region", " EU "));
+        metrics.Record("o", 1, ("a\0b", "1"), ("a�b", "2"));
+
+        metrics.Flush();
+
+        var points = Points();
+        Assert.Equal(2, points.Count(point => point.Name == "m"));
+
+        var region = Assert.Single(points, point => point.Name == "n");
+        Assert.Equal(2, region.Count);
+        Assert.Equal("EU", Assert.Single(region.Dimensions).Value);
+
+        Assert.Equal("a�b", Assert.Single(Assert.Single(points, point => point.Name == "o").Dimensions).Key);
+    }
+
+    [Fact]
+    public void LongNamesAndValues_AreCut_BeforeTheyAreKept()
+    {
+        using var metrics = new LogbookMetrics(_client, BaseOptions, null, _time);
+
+        metrics.Record(new string('n', 300), 1, ("Shop", new string('v', 600)));
+        metrics.Record(new string('n', 250), 1, ("Shop", new string('v', 550)));
+
+        metrics.Flush();
+
+        var point = Assert.Single(Points());
+        Assert.Equal(2, point.Count);
+        Assert.Equal(200, point.Name.Length);
+        Assert.Equal(500, point.Dimensions["Shop"].Length);
+    }
+
+    [Fact]
+    public async Task Dispose_WhileAnObservableInstrumentHangs_WaitsOnlyForTheShutdownTimeout()
+    {
+        var meterName = $"Logbook.Tests.{Guid.NewGuid():N}";
+        var options = new LogbookOptions
+        {
+            Endpoint = BaseOptions.Endpoint,
+            ApiKey = BaseOptions.ApiKey,
+            ShutdownTimeout = TimeSpan.FromMilliseconds(200)
+        };
+        options.Meters.Add(meterName);
+
+        using var meter = new Meter(meterName);
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+
+        meter.CreateObservableGauge("stuck", () =>
+        {
+            entered.Set();
+            release.Wait(TimeSpan.FromSeconds(30));
+
+            return 1;
+        });
+
+        var metrics = new LogbookMetrics(_client, options, null, _time);
+
+        try
+        {
+            var flushing = Task.Run(metrics.Flush, TestContext.Current.CancellationToken);
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken));
+
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            metrics.Dispose();
+
+            Assert.InRange(watch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(5));
+
+            release.Set();
+            await flushing;
+        }
+        finally
+        {
+            release.Set();
+        }
+    }
+
+    [Fact]
     public async Task ConcurrentRecording_LosesNothing_AcrossFlushes()
     {
         using var metrics = new LogbookMetrics(_client, BaseOptions, null, _time);
