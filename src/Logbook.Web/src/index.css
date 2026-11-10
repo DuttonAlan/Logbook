@@ -27,6 +27,9 @@
   --level-warning: light-dark(#8a5a00, #f0b849);
   --level-error: light-dark(#bb1f27, #ff8080);
   --level-critical: #bd1f28;
+
+  --chart-neutral: light-dark(#a8b3c0, #5b6673);
+  --chart-grid: light-dark(#ebe8e4, #2d2a27);
 }
 
 * {
@@ -1141,6 +1144,189 @@ pre {
     grid-row: 2;
   }
 }
+
+/* Overview and metrics */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.stat-label {
+  color: var(--muted);
+}
+
+.stat-value {
+  font-size: 1.6rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-value.bad {
+  color: var(--bad);
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 32rem), 1fr));
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.dashboard-grid .panel,
+.page > .panel {
+  min-width: 0;
+  padding: 1rem;
+}
+
+.panel-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.panel-link {
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.table.compact {
+  margin: 0;
+}
+
+.table.compact th,
+.table.compact td {
+  padding: 0.35rem 0.6rem;
+}
+
+.table .number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.chart {
+  margin: 0;
+}
+
+.chart-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.chart-title {
+  font-weight: 600;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+  color: var(--muted);
+}
+
+.chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.chart-swatch {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 3px;
+}
+
+.chart-plot {
+  position: relative;
+  width: 100%;
+}
+
+.chart-plot svg {
+  display: block;
+}
+
+.chart-grid {
+  stroke: var(--chart-grid);
+  stroke-width: 1;
+}
+
+.chart-axis {
+  fill: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-hit {
+  fill: transparent;
+}
+
+.chart-tooltip {
+  position: absolute;
+  z-index: 1;
+  min-width: 11rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 15%);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.chart-tooltip-time {
+  margin-bottom: 0.25rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.chart-tooltip-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chart-tooltip-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 550;
+}
+
+.chart-table {
+  margin-top: 0.4rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.chart-table .table {
+  color: var(--text);
+}
+
+.dialog.wide {
+  width: min(36rem, calc(100vw - 2rem));
+}
+
 /* Narrow windows: the details cover the list, and only the essential columns remain. */
 
 @media (max-width: 900px) {

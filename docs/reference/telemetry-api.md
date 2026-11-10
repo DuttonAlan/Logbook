@@ -1,6 +1,6 @@
 # Telemetry API
 
-Besides Log Events, Logbook stores **spans**: measured operations of an Application. A span is either a *request* the Application received or a *dependency* it called. This page describes the endpoints for spans, for transactions, and for groups of exceptions. The [`Logbook.AspNetCore`](../how-to/track-requests.md) package sends spans for you, and the web interface reads them for you.
+Besides Log Events, Logbook stores **spans**: measured operations of an Application. A span is either a *request* the Application received or a *dependency* it called. It also stores **custom metrics** the Application measures. This page describes the endpoints for spans, transactions, groups of exceptions, metrics and the overview of the dashboard. The [`Logbook.AspNetCore`](../how-to/track-requests.md) package sends spans for you, and the web interface reads them for you.
 
 - **Authentication to send:** the API Key of an Application in the header `X-Logbook-Key`, as for [Log Events](log-api.md).
 - **Authentication to read:** a session from [signing in](admin-api.md#sign-in). An API Key can only send.
@@ -150,3 +150,114 @@ The fingerprint is computed when a Log Event is received, from its `exception`:
 - **The types of the inner exceptions**, in any order, but not their stacks.
 
 The message does not count, as it often contains values such as an Id. An `exception` with neither a `type` nor a `stackTrace` belongs to no group. Log Events stored before this feature have no fingerprint, and are not grouped.
+
+## Send metrics
+
+`POST /api/v1/metrics`
+
+Custom metrics arrive **aggregated**: one metric point holds the measurements of one metric with one set of dimensions over a short interval, as their count, sum, minimum and maximum. [`LogbookMetrics`](../how-to/track-metrics.md) in the SDK aggregates for you, by default per minute. The body is a JSON array with at least one metric point, and can be compressed with `Content-Encoding: gzip`:
+
+```json
+[
+  {
+    "timestamp": "2026-11-04T10:15:00Z",
+    "name": "orders.placed",
+    "count": 12,
+    "sum": 1250.5,
+    "min": 12.5,
+    "max": 320,
+    "environment": "Production",
+    "dimensions": { "Region": "EU", "Shop": "A" }
+  }
+]
+```
+
+| Field | Required | Limit | Description |
+|---|---|---|---|
+| `timestamp` | yes | within the [accepted time window](log-api.md#limits) | When the interval of the measurements started, with an offset or `Z`. Stored in UTC. |
+| `name` | yes | 200 characters | The name of the metric, with few distinct values, e.g. `orders.placed`. Compared exactly. |
+| `count` | yes | at least 1 | The number of measurements. |
+| `sum` | yes | a finite number | The sum of the measurements. |
+| `min`, `max` | yes | finite, `min` not larger than `max` | The smallest and the largest measurement. |
+| `environment` | no | 100 characters | A label to filter by. If it is missing or empty, `Unknown` is stored. |
+| `dimensions` | no | 10 entries; names 100, values 500 characters | Strings to filter by, e.g. `{"Region": "EU"}`. Names are trimmed and must be unique and not empty. An entry without a value is left out. |
+
+The responses, the handling of a batch as a whole, the rate limit and when metric points are stored are the same as for [sending Log Events](log-api.md#responses), with `{"accepted": 1}` for the number of metric points. Like spans, metric points have a queue of their own, with the limit `LogIngestion:MaxQueuedBytes`. Retention and deleting an Application cover them as they cover Log Events.
+
+## Read a metric
+
+`GET /api/v1/metrics?name=orders.placed`
+
+Combines the metric points of one metric into buckets of equal width, for a chart.
+
+| Parameter | Description |
+|---|---|
+| `name` | Required. The name of the metric, compared exactly. |
+| `from` | The start of the range. Default: one day before `to`. |
+| `to` | The end of the range. Default: now. Must be later than `from`, and at most 3650 days after it. |
+| `applicationId` | Only metric points of this Application. |
+| `environment` | Only metric points of this Environment, compared exactly. |
+| `dimension` | Only metric points with this dimension, as `Name=Value`, e.g. `Region=EU`. Repeat it, up to 10 times, to require several. |
+
+```json
+{
+  "name": "orders.placed",
+  "from": "2026-11-03T10:00:00Z",
+  "to": "2026-11-04T10:15:00Z",
+  "bucketSeconds": 900,
+  "buckets": [
+    { "timestamp": "2026-11-03T10:00:00Z", "count": 120, "sum": 15400.5, "min": 12.5, "max": 320 },
+    { "timestamp": "2026-11-03T10:15:00Z", "count": 0, "sum": 0, "min": null, "max": null }
+  ]
+}
+```
+
+- **Buckets** are 1, 5, 15 or 30 minutes, 1, 3, 6 or 12 hours, 1 day or 1 week wide: the narrowest that splits the range into at most 120 buckets. They are aligned to fixed points in time (UTC), so `from` is the start of the bucket that contains the requested start.
+- **Every bucket** of the range is returned, also those without measurements, which have a `count` of 0 and no `min` or `max`.
+- **The average** of a bucket is `sum` divided by `count`. Combining the points of several Applications, Environments or dimensions adds up their counts and sums.
+
+## List metrics
+
+`GET /api/v1/metrics/names`
+
+Returns the names of the metrics with metric points in a time range, ordered by name, at most 1000. The parameters `from` (default: 7 days before `to`), `to`, `applicationId` and `environment` work as above.
+
+```json
+{ "items": [{ "name": "orders.placed", "lastSeen": "2026-11-04T10:15:00Z" }] }
+```
+
+`lastSeen` is the start of the interval of the latest metric point in the range.
+
+## Overview
+
+`GET /api/v1/overview`
+
+What the dashboard shows: Log Events and requests over time, and the slowest requests. The parameters `from`, `to`, `applicationId` and `environment` work as for [reading a metric](#read-a-metric), with the same buckets. `slowest` is the number of slowest requests, from 0 to 50. Default: `10`.
+
+```json
+{
+  "from": "2026-11-03T10:00:00Z",
+  "to": "2026-11-04T10:15:00Z",
+  "bucketSeconds": 900,
+  "logEvents": [{ "timestamp": "2026-11-03T10:00:00Z", "total": 1520, "warnings": 12, "errors": 3 }],
+  "requests": [{ "timestamp": "2026-11-03T10:00:00Z", "count": 840, "failed": 7 }],
+  "requestCount": 20160,
+  "failedRequestCount": 42,
+  "slowestRequests": [
+    {
+      "applicationId": "0199d1a2-7c3e-7b4a-9f10-5c963f66afa6",
+      "name": "GET /orders/{id}",
+      "count": 840,
+      "failed": 7,
+      "averageDurationMs": 42.5,
+      "p95DurationMs": 180,
+      "maxDurationMs": 1250
+    }
+  ]
+}
+```
+
+- `logEvents` and `requests` have every bucket of the range. `errors` counts the levels Error and Critical.
+- Only spans of the kind `Request` count as requests. The error rate is `failedRequestCount` divided by `requestCount`.
+- `slowestRequests` groups the requests of each Application by name, ordered by the 95th percentile of their duration, slowest first.
+- The most frequent exceptions come from [`GET /api/v1/exceptions?sort=Count`](#find-groups-of-exceptions).

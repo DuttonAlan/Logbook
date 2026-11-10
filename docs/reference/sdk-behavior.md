@@ -61,6 +61,18 @@ If any of these limits is reached, or text in a value or an exception or the nam
 
 Spans have a buffer of their own, with the same limits `MaxQueueSize` and `MaxQueueBytes`, so a busy application cannot push out the Log Events that explain what went wrong. This means the most the client can hold is twice those values. Each buffer has its own sending loop and backoff, but `ShutdownTimeout` applies once, to both together. The [responses](#responses), [shutdown](#shutdown) and [diagnostics](#diagnostics) below apply to spans as they do to Log Events, and the events of the `EventSource` do not tell the two apart. Spans outside of the time window are dropped, and their text is cut at the limits of the server without a mark, as they have no properties to carry one.
 
+## Custom metrics
+
+`LogbookMetrics` in `Logbook.Sdk` aggregates measurements in memory and hands them to the client once per `MetricInterval`:
+
+- **One metric point per series:** a series is a metric name with one set of dimensions, in any order. Its point carries the count, sum, minimum and maximum of the interval, and the start of the interval as its timestamp. A series without measurements in an interval sends nothing.
+- **Bounded:** at most 1000 series per interval. Measurements of further series are dropped until the interval ends, and the `EventSource` reports how many. Recording never throws, and blocks only for as long as adding to the series takes.
+- **Values the server rejects** are made acceptable before a measurement joins its series, so a series holds no more than the server would store: a measurement that is not a finite number is ignored, names and values are trimmed, cut at the limits of the server and have U+0000 replaced as the server does, dimensions without a name or value are left out, the first of two with the same name is kept, and only the first 10 dimensions by name are sent.
+- **Meters:** with `Meters` set, a `MeterListener` collects counters, up-down counters, histograms and gauges of those meters as they record, and reads observable instruments once at the end of each interval. A measurement becomes a measurement of the metric named like the instrument, with its tags as dimensions. An observable counter reports its running total, so its maximum is the latest value.
+- **Shutdown:** disposing `LogbookMetrics` hands over the current interval. It waits for at most `ShutdownTimeout` for a flush under way, for example one held up by an observable instrument, and otherwise gives up the last interval. Dependency injection disposes it before the client, which then sends it within `ShutdownTimeout` as well.
+
+Metric points have a buffer and a sending loop of their own, like spans, with the same limits, responses and diagnostics.
+
 ## Responses
 
 | Response | What the client does | Next attempt |

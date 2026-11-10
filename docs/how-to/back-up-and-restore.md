@@ -18,7 +18,7 @@ Logs are often worth less than the space they take. Without them, the backup is 
 
 ```sh
 docker compose exec -T db pg_dump -U logbook -d logbook --format=custom \
-  --exclude-table-data='telemetry.log_events*' --exclude-table-data='telemetry.spans*' > logbook-config-$(date +%F).dump
+  --exclude-table-data='telemetry.log_events*' --exclude-table-data='telemetry.spans*' --exclude-table-data='telemetry.metrics*' > logbook-config-$(date +%F).dump
 ```
 
 ## Restore

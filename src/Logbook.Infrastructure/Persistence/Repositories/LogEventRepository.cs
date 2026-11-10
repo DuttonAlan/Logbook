@@ -5,6 +5,8 @@
 using System.Text.Json;
 
 using Logbook.Core.Abstractions;
+using Logbook.Core.Application.Charts;
+using Logbook.Core.Application.Dashboard.GetOverview;
 using Logbook.Core.Application.ExceptionGroups.Search;
 using Logbook.Core.Application.LogEvents.Search;
 using Logbook.Core.Application.LogEvents.Tail;
@@ -168,6 +170,37 @@ public sealed class LogEventRepository(LogbookContext context) : ILogEventReposi
         }
 
         return responses;
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<LogEventBucketResponse>> CountByBucket(
+        ChartRange range,
+        Guid? applicationId,
+        string? environment,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(range);
+
+        var (from, to, width, origin) = (range.From, range.To, range.BucketWidth, ChartRange.Origin);
+        var (warning, error) = ((short)LogEventLevel.Warning, (short)LogEventLevel.Error);
+
+        // date_bin must get the same width and origin as ChartRange, so that the buckets match the ones it lists.
+        var rows = await context.Database
+            .SqlQuery<LogEventBucketRow>($"""
+                SELECT date_bin({width}, e."Timestamp", {origin}) AS "Bucket",
+                    count(*) AS "Total",
+                    count(*) FILTER (WHERE e."Level" = {warning}) AS "Warnings",
+                    count(*) FILTER (WHERE e."Level" >= {error}) AS "Errors"
+                FROM telemetry.log_events e
+                WHERE e."Timestamp" >= {from} AND e."Timestamp" < {to}
+                    AND ({applicationId}::uuid IS NULL OR e."ApplicationId" = {applicationId})
+                    AND ({environment}::text IS NULL OR e."Environment" = {environment})
+                GROUP BY 1
+                ORDER BY 1
+                """)
+            .ToListAsync(cancellationToken);
+
+        return [.. rows.Select(row => new LogEventBucketResponse(row.Bucket, row.Total, row.Warnings, row.Errors))];
     }
 
     /// <inheritdoc/>

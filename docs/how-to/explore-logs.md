@@ -26,6 +26,28 @@ The filters are part of the address, so you can reload the page or send the link
 
 Times are shown in the time zone of your browser. Hover over a time to see the full date.
 
+## Save a search
+
+To run a search again with one click, choose **Save…** next to the filters, enter a name such as *Errors in Production*, and choose **Save**. The saved search keeps the text, the levels, the Application, the Environment, the properties and the time range. A relative time range such as the last 24 hours counts from when you open it again.
+
+- **Open** a saved search from the list *Saved searches…* next to the button. The list shows the name of the saved search that matches the current filters.
+- **Update** one by saving the current search under its name again: it replaces what it searches for.
+- **Delete** one in the dialog of **Save…**.
+
+Saved searches are shared by everyone who can sign in. See [Saved searches](../reference/admin-api.md#saved-searches).
+
+## See the overview
+
+**Overview** shows what is going on at a glance, for a time range and optionally one Application:
+
+- the number of Log Events, errors and requests, and the share of failed requests,
+- Log Events over time, with warnings and errors stacked on top,
+- requests over time, with those that failed,
+- the slowest requests, by the 95th percentile of their duration, and
+- the most frequent exceptions.
+
+Hover over a bar to see its values, or open *Show as a table*. Select a request to see its occurrences, or an exception to see its Log Events. The requests come from [request tracking](track-requests.md). Custom metrics have their own page, see [Track custom metrics](track-metrics.md).
+
 ## Read a Log Event
 
 Select a row to open its details: the whole message, its template, the exception with its stack trace and inner exceptions, and the properties. With the row selected, the arrow keys move to the next and previous Log Event, and <kbd>Esc</kbd> closes the details.

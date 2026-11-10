@@ -49,7 +49,20 @@ public static class LogbookLoggingBuilderExtensions
         builder.Services.TryAddSingleton(CreateClient);
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider, LogbookLoggerProvider>(CreateProvider));
 
+        // Created after the client, so it is disposed before it and hands over its last interval. The hosted service only
+        // creates it when the host starts, so that the configured meters are collected without anyone asking for it.
+        builder.Services.TryAddSingleton(CreateMetrics);
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, LogbookMetricsStarter>());
+
         return builder;
+    }
+
+    private static LogbookMetrics CreateMetrics(IServiceProvider services)
+    {
+        var options = ReadOptions(services);
+        var environment = options?.Environment ?? services.GetService<IHostEnvironment>()?.EnvironmentName;
+
+        return new LogbookMetrics(services.GetRequiredService<LogbookClient>(), options!, environment);
     }
 
     private static LogbookClient CreateClient(IServiceProvider services)
@@ -85,6 +98,18 @@ public static class LogbookLoggingBuilderExtensions
         {
             return null;
         }
+    }
+
+    private sealed class LogbookMetricsStarter(LogbookMetrics metrics) : IHostedService
+    {
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            GC.KeepAlive(metrics);
+
+            return Task.CompletedTask;
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class ConfigureFromSection(IServiceProvider services) : IConfigureOptions<LogbookOptions>

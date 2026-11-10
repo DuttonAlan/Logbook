@@ -106,6 +106,19 @@ public sealed class LogbookOptions
     public TimeSpan ShutdownTimeout { get; set; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
+    ///     How long <see cref="LogbookMetrics"/> aggregates measurements before it sends them as one metric point per metric
+    ///     and set of dimensions. Shorter intervals show changes sooner and send more.
+    /// </summary>
+    public TimeSpan MetricInterval { get; set; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    ///     The names of the <c>System.Diagnostics.Metrics</c> meters whose instruments <see cref="LogbookMetrics"/> collects,
+    ///     e.g. <c>Shop.Orders</c>. A name ending in <c>*</c> matches every meter that starts with the rest, e.g.
+    ///     <c>Shop.*</c>. Empty by default, so nothing is collected without being asked for.
+    /// </summary>
+    public IList<string> Meters { get; } = [];
+
+    /// <summary>
     ///     Finds a setting the client cannot work with. It does not throw, because the client must not take the host
     ///     application down for a wrong setting.
     /// </summary>
@@ -127,6 +140,7 @@ public sealed class LogbookOptions
             _ when MaxFutureOffset < TimeSpan.Zero => nameof(MaxFutureOffset),
             _ when !IsPositive(RequestTimeout) => nameof(RequestTimeout),
             _ when ShutdownTimeout < TimeSpan.Zero || ShutdownTimeout > MaxWaitingTime => nameof(ShutdownTimeout),
+            _ when MetricInterval < TimeSpan.FromSeconds(1) || MetricInterval > MaxWaitingTime => nameof(MetricInterval),
             _ => null
         };
     }

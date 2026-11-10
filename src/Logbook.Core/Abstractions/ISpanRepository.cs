@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 // See the LICENSE file in the project root for license information.
 
+using Logbook.Core.Application.Charts;
+using Logbook.Core.Application.Dashboard.GetOverview;
 using Logbook.Core.Application.LogEvents.Search;
 using Logbook.Core.Application.Spans.Search;
 using Logbook.Core.Domain.Entities;
@@ -35,6 +37,36 @@ public interface ISpanRepository : ITelemetryStore<TraceSpan>
     /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
     /// <returns>The untracked spans.</returns>
     public Task<IReadOnlyList<TraceSpan>> GetByTrace(string traceId, int take, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Counts the requests, and those that failed, in each bucket of a chart. Buckets without requests are left out.
+    /// </summary>
+    /// <param name="range">The time range and its buckets.</param>
+    /// <param name="applicationId">Only requests of this Application.</param>
+    /// <param name="environment">Only requests of this Environment, compared exactly.</param>
+    /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
+    /// <returns>The buckets with requests.</returns>
+    public Task<IReadOnlyList<RequestBucketResponse>> CountRequestsByBucket(
+        ChartRange range,
+        Guid? applicationId,
+        string? environment,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Finds the requests that took longest, grouped by Application and name, slowest 95th percentile first.
+    /// </summary>
+    /// <param name="range">The time range.</param>
+    /// <param name="applicationId">Only requests of this Application.</param>
+    /// <param name="environment">Only requests of this Environment, compared exactly.</param>
+    /// <param name="take">The maximum number of groups to return.</param>
+    /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
+    /// <returns>The groups of requests.</returns>
+    public Task<IReadOnlyList<SlowRequestResponse>> GetSlowestRequests(
+        ChartRange range,
+        Guid? applicationId,
+        string? environment,
+        int take,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Deletes all spans of an Application, in several steps. If it is interrupted, calling it again finishes it.

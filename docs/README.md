@@ -23,7 +23,8 @@ Start here if you are new to Logbook.
 - [Manage Applications and API Keys](how-to/manage-applications.md)
 - [Connect an application](how-to/connect-application.md)
 - [Track requests and dependencies](how-to/track-requests.md)
-- [Search and follow logs](how-to/explore-logs.md)
+- [Track custom metrics](how-to/track-metrics.md)
+- [Search and follow logs](how-to/explore-logs.md): including saved searches and the overview
 - [Configure sign-in](how-to/configure-sign-in.md)
 - [Deploy to production](how-to/deploy-production.md)
 - [Configure a reverse proxy](how-to/reverse-proxy.md)
@@ -33,9 +34,9 @@ Start here if you are new to Logbook.
 ## Reference
 
 - [Configuration](reference/configuration.md): every setting, its default and its limits
-- [Admin API](reference/admin-api.md): sign in, manage Applications and API Keys
+- [Admin API](reference/admin-api.md): sign in, manage Applications, API Keys and saved searches
 - [Log API](reference/log-api.md): send, search and follow Log Events
-- [Telemetry API](reference/telemetry-api.md): spans, transactions and groups of exceptions
+- [Telemetry API](reference/telemetry-api.md): spans, transactions, groups of exceptions, metrics and the overview
 - [SDK behavior](reference/sdk-behavior.md): retries, limits, shutdown and diagnostics of the SDK
 - [Health checks](reference/health-checks.md)
 

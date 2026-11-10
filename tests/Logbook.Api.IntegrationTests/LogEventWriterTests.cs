@@ -319,6 +319,15 @@ public sealed class LogEventWriterTests
             throw new NotSupportedException();
         }
 
+        public Task<IReadOnlyList<Logbook.Core.Application.Dashboard.GetOverview.LogEventBucketResponse>> CountByBucket(
+            Logbook.Core.Application.Charts.ChartRange range,
+            Guid? applicationId,
+            string? environment,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
         public Task<long> DeleteByApplication(Guid applicationId, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();

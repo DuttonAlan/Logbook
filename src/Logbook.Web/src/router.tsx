@@ -2,6 +2,9 @@ import { Link, createRootRoute, createRoute, createRouter } from '@tanstack/reac
 import { Layout } from './components/Layout.tsx'
 import { ApplicationPage } from './features/applications/ApplicationPage.tsx'
 import { ApplicationsPage } from './features/applications/ApplicationsPage.tsx'
+import { MetricsPage } from './features/dashboard/MetricsPage.tsx'
+import { OverviewPage } from './features/dashboard/OverviewPage.tsx'
+import { parseMetricSearch, parseOverviewSearch } from './features/dashboard/search.ts'
 import { parseLogSearch } from './features/log-explorer/filters.ts'
 import { LogsPage } from './features/log-explorer/LogsPage.tsx'
 import { ExceptionsPage } from './features/telemetry/ExceptionsPage.tsx'
@@ -54,6 +57,20 @@ const exceptionsRoute = createRoute({
   component: ExceptionsPage,
 })
 
+const overviewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overview',
+  validateSearch: parseOverviewSearch,
+  component: OverviewPage,
+})
+
+const metricsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/metrics',
+  validateSearch: parseMetricSearch,
+  component: MetricsPage,
+})
+
 const traceRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/traces/$traceId',
@@ -61,7 +78,7 @@ const traceRoute = createRoute({
 })
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([logsRoute, requestsRoute, exceptionsRoute, traceRoute, applicationsRoute, applicationRoute]),
+  routeTree: rootRoute.addChildren([logsRoute, overviewRoute, metricsRoute, requestsRoute, exceptionsRoute, traceRoute, applicationsRoute, applicationRoute]),
 })
 
 declare module '@tanstack/react-router' {

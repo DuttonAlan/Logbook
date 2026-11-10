@@ -138,3 +138,72 @@ export interface CreatedApplication {
   id: string
   apiKey: IssuedApiKey
 }
+
+export interface LogEventBucket {
+  timestamp: string
+  total: number
+  warnings: number
+  errors: number
+}
+
+export interface RequestBucket {
+  timestamp: string
+  count: number
+  failed: number
+}
+
+export interface SlowRequest {
+  applicationId: string
+  name: string
+  count: number
+  failed: number
+  averageDurationMs: number
+  p95DurationMs: number
+  maxDurationMs: number
+}
+
+export interface Overview {
+  from: string
+  to: string
+  bucketSeconds: number
+  logEvents: LogEventBucket[]
+  requests: RequestBucket[]
+  requestCount: number
+  failedRequestCount: number
+  slowestRequests: SlowRequest[]
+}
+
+export interface ChartQuery {
+  from?: string
+  applicationId?: string
+  environment?: string
+}
+
+export interface MetricName {
+  name: string
+  lastSeen: string
+}
+
+export interface MetricBucket {
+  timestamp: string
+  count: number
+  sum: number
+  min: number | null
+  max: number | null
+}
+
+export interface MetricSeries {
+  name: string
+  from: string
+  to: string
+  bucketSeconds: number
+  buckets: MetricBucket[]
+}
+
+export interface SavedSearch {
+  id: string
+  name: string
+  query: string
+  createdAt: string
+  modifiedAt: string | null
+}
