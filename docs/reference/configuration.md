@@ -95,6 +95,8 @@ The SDK is configured through `LogbookOptions`. With `builder.Logging.AddLogbook
 | `MaxFutureOffset` | `1.00:00:00` | How far in the future the timestamp of an event may be. An event beyond that is dropped. Must not be longer than the setting `LogIngestion:MaxFutureOffset` of the server. |
 | `RequestTimeout` | `00:00:30` | Maximum time to wait for the server to answer one request. At most one day. |
 | `ShutdownTimeout` | `00:00:05` | Maximum time disposing the client waits for the remaining events to be sent. `00:00:00` does not wait. At most one day. |
+| `MetricInterval` | `00:01:00` | How long `LogbookMetrics` aggregates measurements before it sends them as one metric point per metric and set of dimensions. From one second to one day. See [Track custom metrics](../how-to/track-metrics.md). |
+| `Meters` | empty | Names of `System.Diagnostics.Metrics` meters whose instruments `LogbookMetrics` collects, e.g. `["Shop.Orders"]`. A name ending in `*` matches every meter starting with the rest, e.g. `Shop.*`. Compared without regard to case. |
 
 Which levels are sent is set like for any other logging provider, under the name `Logbook`, for example `Logging:Logbook:LogLevel:Default`.
 

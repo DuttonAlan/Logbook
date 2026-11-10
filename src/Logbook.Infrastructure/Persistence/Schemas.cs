@@ -10,12 +10,12 @@ namespace Logbook.Infrastructure.Persistence;
 public static class Schemas
 {
     /// <summary>
-    ///     Configuration that is kept: Applications, API Keys, retention settings and, later, alert rules.
+    ///     Configuration that is kept: Applications, API Keys, retention settings, saved searches and, later, alert rules.
     /// </summary>
     public const string Config = "config";
 
     /// <summary>
-    ///     Telemetry that expires: Log Events and, later, requests and dependencies, partitioned by day.
+    ///     Telemetry that expires: Log Events, spans and metric points, partitioned by day.
     /// </summary>
     public const string Telemetry = "telemetry";
 }

@@ -33,6 +33,16 @@ public sealed class LogbookContext(DbContextOptions<LogbookContext> options) : D
     /// </summary>
     public DbSet<TraceSpan> Spans => Set<TraceSpan>();
 
+    /// <summary>
+    ///     The Metrics Table, partitioned by day.
+    /// </summary>
+    public DbSet<MetricPoint> Metrics => Set<MetricPoint>();
+
+    /// <summary>
+    ///     The Saved Searches Table.
+    /// </summary>
+    public DbSet<SavedSearch> SavedSearches => Set<SavedSearch>();
+
     /// <inheritdoc/>
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 

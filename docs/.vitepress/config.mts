@@ -74,6 +74,7 @@ export default defineConfig({
           { text: 'Manage Applications and API Keys', link: '/how-to/manage-applications' },
           { text: 'Connect an application', link: '/how-to/connect-application' },
           { text: 'Track requests and dependencies', link: '/how-to/track-requests' },
+          { text: 'Track custom metrics', link: '/how-to/track-metrics' },
           { text: 'Search and follow logs', link: '/how-to/explore-logs' },
           { text: 'Configure sign-in', link: '/how-to/configure-sign-in' },
           { text: 'Deploy to production', link: '/how-to/deploy-production' },

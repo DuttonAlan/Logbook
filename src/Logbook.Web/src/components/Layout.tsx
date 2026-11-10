@@ -47,8 +47,10 @@ export function Layout() {
           <Link to="/" activeOptions={{ exact: true, includeSearch: false }}>
             Logs
           </Link>
+          <Link to="/overview">Overview</Link>
           <Link to="/requests">Requests</Link>
           <Link to="/exceptions">Exceptions</Link>
+          <Link to="/metrics">Metrics</Link>
           <Link to="/applications">Applications</Link>
         </nav>
         <div className="topbar-end">

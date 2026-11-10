@@ -8,6 +8,7 @@ import { FilterBar } from './FilterBar.tsx'
 import { LogDetail } from './LogDetail.tsx'
 import { LogList, type LogListHandle } from './LogList.tsx'
 import { MAX_PROPERTY_FILTERS, hasFilters, toContentQuery, toSearchQuery, type LogSearch } from './filters.ts'
+import { SavedSearches } from './SavedSearches.tsx'
 import { useLiveTail, type LiveTailStatus } from './useLiveTail.ts'
 
 const route = getRouteApi('/')
@@ -187,6 +188,7 @@ export function LogsPage() {
         <button type="button" className={`button ${isLive ? 'primary' : ''}`} aria-pressed={isLive} onClick={() => onChange({ live: isLive ? undefined : true })}>
           Live tail
         </button>
+        <SavedSearches />
       </FilterBar>
 
       {isLive && (

@@ -165,6 +165,80 @@ namespace Logbook.Infrastructure.Persistence.Migrations
                     b.ToTable("log_events", "telemetry");
                 });
 
+            modelBuilder.Entity("Logbook.Core.Domain.Entities.MetricPoint", b =>
+                {
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ApplicationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Count")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Dimensions")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Environment")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<double>("Max")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("Min")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<double>("Sum")
+                        .HasColumnType("double precision");
+
+                    b.HasKey("Timestamp", "Id");
+
+                    b.HasIndex("ApplicationId", "Timestamp");
+
+                    b.HasIndex("Name", "Timestamp");
+
+                    b.ToTable("metrics", "telemetry");
+                });
+
+            modelBuilder.Entity("Logbook.Core.Domain.Entities.SavedSearch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Query")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("saved_searches", "config");
+                });
+
             modelBuilder.Entity("Logbook.Core.Domain.Entities.TraceSpan", b =>
                 {
                     b.Property<DateTime>("Timestamp")

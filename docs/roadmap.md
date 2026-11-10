@@ -111,11 +111,11 @@ Every Log Event belongs to an **Application**, which the server takes from the A
 - [x] **Exceptions**: grouped by type and stack fingerprint, with counts and first and last occurrence
 - [x] **Transactions**: request, dependencies and Log Events of one trace on one timeline
 
-## M6: Dashboards and metrics
+## M6: Dashboards and metrics ✅
 
-- [ ] Overview: Log Events over time, error rate, slowest requests, most frequent exceptions
-- [ ] Custom metrics from the SDK
-- [ ] Saved searches
+- [x] Overview: Log Events over time, error rate, slowest requests, most frequent exceptions
+- [x] Custom metrics from the SDK
+- [x] Saved searches
 
 ## M7: Alerts
 

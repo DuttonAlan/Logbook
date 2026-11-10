@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 // See the LICENSE file in the project root for license information.
 
+using Logbook.Core.Application.Charts;
+using Logbook.Core.Application.Dashboard.GetOverview;
 using Logbook.Core.Application.ExceptionGroups.Search;
 using Logbook.Core.Application.LogEvents.Search;
 using Logbook.Core.Application.LogEvents.Tail;
@@ -100,5 +102,19 @@ public interface ILogEventRepository : ITelemetryStore<LogEvent>
         LogEventFilter filter,
         ExceptionGroupSort sort,
         int take,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Counts the Log Events in each bucket of a chart, by level. Buckets without Log Events are left out.
+    /// </summary>
+    /// <param name="range">The time range and its buckets.</param>
+    /// <param name="applicationId">Only Log Events of this Application.</param>
+    /// <param name="environment">Only Log Events of this Environment, compared exactly.</param>
+    /// <param name="cancellationToken">CancellationToken to cancel the request.</param>
+    /// <returns>The buckets with Log Events.</returns>
+    public Task<IReadOnlyList<LogEventBucketResponse>> CountByBucket(
+        ChartRange range,
+        Guid? applicationId,
+        string? environment,
         CancellationToken cancellationToken = default);
 }

@@ -3,6 +3,8 @@
 // See the LICENSE file in the project root for license information.
 
 using Logbook.Core.Abstractions;
+using Logbook.Core.Application.Charts;
+using Logbook.Core.Application.Dashboard.GetOverview;
 using Logbook.Core.Application.LogEvents.Search;
 using Logbook.Core.Application.Spans.Search;
 using Logbook.Core.Domain.Entities;
@@ -68,6 +70,84 @@ public sealed class SpanRepository(LogbookContext context) : ISpanRepository
             .ThenBy(span => span.Id)
             .Take(take)
             .ToListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<RequestBucketResponse>> CountRequestsByBucket(
+        ChartRange range,
+        Guid? applicationId,
+        string? environment,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(range);
+
+        var (from, to, width, origin) = (range.From, range.To, range.BucketWidth, ChartRange.Origin);
+        var request = (short)SpanKind.Request;
+
+        // date_bin must get the same width and origin as ChartRange, so that the buckets match the ones it lists. The
+        // index on the kind serves this.
+        var rows = await context.Database
+            .SqlQuery<RequestBucketRow>($"""
+                SELECT date_bin({width}, s."Timestamp", {origin}) AS "Bucket",
+                    count(*) AS "Count",
+                    count(*) FILTER (WHERE NOT s."Success") AS "Failed"
+                FROM telemetry.spans s
+                WHERE s."Kind" = {request}
+                    AND s."Timestamp" >= {from} AND s."Timestamp" < {to}
+                    AND ({applicationId}::uuid IS NULL OR s."ApplicationId" = {applicationId})
+                    AND ({environment}::text IS NULL OR s."Environment" = {environment})
+                GROUP BY 1
+                ORDER BY 1
+                """)
+            .ToListAsync(cancellationToken);
+
+        return [.. rows.Select(row => new RequestBucketResponse(row.Bucket, row.Count, row.Failed))];
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<SlowRequestResponse>> GetSlowestRequests(
+        ChartRange range,
+        Guid? applicationId,
+        string? environment,
+        int take,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(range);
+
+        var (from, to) = (range.From, range.To);
+        var request = (short)SpanKind.Request;
+
+        // The Name last, so that the order is the same for every request.
+        var rows = await context.Database
+            .SqlQuery<SlowRequestRow>($"""
+                SELECT s."ApplicationId", s."Name",
+                    count(*) AS "Count",
+                    count(*) FILTER (WHERE NOT s."Success") AS "Failed",
+                    avg(s."DurationMs") AS "AverageDurationMs",
+                    percentile_cont(0.95) WITHIN GROUP (ORDER BY s."DurationMs") AS "P95DurationMs",
+                    max(s."DurationMs") AS "MaxDurationMs"
+                FROM telemetry.spans s
+                WHERE s."Kind" = {request}
+                    AND s."Timestamp" >= {from} AND s."Timestamp" < {to}
+                    AND ({applicationId}::uuid IS NULL OR s."ApplicationId" = {applicationId})
+                    AND ({environment}::text IS NULL OR s."Environment" = {environment})
+                GROUP BY s."ApplicationId", s."Name"
+                ORDER BY "P95DurationMs" DESC, s."Name", s."ApplicationId"
+                LIMIT {take}
+                """)
+            .ToListAsync(cancellationToken);
+
+        return
+        [
+            .. rows.Select(row => new SlowRequestResponse(
+                row.ApplicationId,
+                row.Name,
+                row.Count,
+                row.Failed,
+                row.AverageDurationMs,
+                row.P95DurationMs,
+                row.MaxDurationMs))
+        ];
     }
 
     /// <inheritdoc/>

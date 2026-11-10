@@ -86,6 +86,32 @@ The body of `PUT /api/v1/applications/{id}/retention` is `{"retentionDays": 14}`
 
 In `GET /api/v1/applications/{id}`, `retentionDays` is what was set for this Application, and `effectiveRetentionDays` is what applies. Log Events past it are removed by the next retention run, and cannot be recovered.
 
+## Saved searches
+
+A saved search is a search of the log explorer under a name. Everyone who can sign in shares them.
+
+| Endpoint | Success | Description |
+|---|---|---|
+| `GET /api/v1/saved-searches` | `200` | List, ordered by name. Returns a plain JSON array. |
+| `POST /api/v1/saved-searches` | `201` | Create, with `name` and `query`. `409` if the name is taken, or if 500 saved searches exist. |
+| `PUT /api/v1/saved-searches/{id}` | `200` | Rename or replace the query, with `name` and `query`. `404` if unknown, `409` if the name is taken. |
+| `DELETE /api/v1/saved-searches/{id}` | `204` | Delete. Also succeeds if the saved search does not exist. |
+
+A saved search looks like this:
+
+```json
+{
+  "id": "0199d1a2-7c3e-7b4a-9f10-5c963f66afa6",
+  "name": "Errors in Production",
+  "query": "level=%5B%22Error%22%5D&env=Production&range=24h",
+  "createdAt": "2026-11-04T10:15:00Z",
+  "modifiedAt": null
+}
+```
+
+- `name` has 1 to 100 characters, is trimmed, must be unique, and must not contain control characters. Names are compared exactly.
+- `query` is the encoded query string of the log explorer at `/`, without the leading `?`, which is removed if sent. It has at most 4000 characters and no spaces, control characters or `#`. Logbook does not interpret it: the web interface opens `/?{query}`.
+
 ## API Keys
 
 | Endpoint | Success | Description |
